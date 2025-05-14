@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/bsmi021-mcp-gemini-server-badge.png)](https://mseep.ai/app/bsmi021-mcp-gemini-server)
+
 # MCP Gemini Server
 
 [![smithery badge](https://smithery.ai/badge/@bsmi021/mcp-gemini-server)](https://smithery.ai/server/@bsmi021/mcp-gemini-server)
