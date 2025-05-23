@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/bsmi021-mcp-gemini-server-badge.png)](https://mseep.ai/app/bsmi021-mcp-gemini-server)
+
 # MCP Gemini Server
 
 ## Table of Contents
