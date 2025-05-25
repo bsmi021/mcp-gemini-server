@@ -107,7 +107,7 @@ const SystemInstructionSchema = z
 
 // --- Tool Definition ---
 
-export const GEMINI_ROUTE_MESSAGE_TOOL_NAME = "gemini_routeMessage";
+export const GEMINI_ROUTE_MESSAGE_TOOL_NAME = "gemini_route_message";
 
 export const GEMINI_ROUTE_MESSAGE_TOOL_DESCRIPTION = `Routes a message to the most appropriate model from a provided list based on message content. Returns the model's response along with which model was selected.`;
 

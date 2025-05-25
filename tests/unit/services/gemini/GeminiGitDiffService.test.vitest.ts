@@ -1,7 +1,5 @@
-import { describe, it, beforeAll, afterEach, expect, vi } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 import { GeminiGitDiffService } from "../../../../src/services/gemini/GeminiGitDiffService.js";
-import { Content } from "../../../../src/services/gemini/GeminiTypes.js";
-import gitdiffParser from "gitdiff-parser";
 
 // Mock diff content
 const mockDiffContent = `diff --git a/src/utils/logger.ts b/src/utils/logger.ts
@@ -64,10 +62,25 @@ vi.mock("gitdiff-parser", () => {
   };
 });
 
+interface MockGenerateContentResponse {
+  response: {
+    text: () => string;
+  };
+}
+
+interface MockModel {
+  generateContent: ReturnType<typeof vi.fn>;
+  generateContentStream: ReturnType<typeof vi.fn>;
+}
+
+interface MockGenAI {
+  getGenerativeModel: ReturnType<typeof vi.fn<unknown[], MockModel>>;
+}
+
 describe("GeminiGitDiffService", () => {
-  let mockGenAI: any;
-  let mockModel: any;
-  let mockResponse: any;
+  let mockGenAI: MockGenAI;
+  let mockModel: MockModel;
+  let mockResponse: MockGenerateContentResponse;
   let service: GeminiGitDiffService;
 
   // Setup test fixture
@@ -95,11 +108,11 @@ describe("GeminiGitDiffService", () => {
     // Create mock GoogleGenAI
     mockGenAI = {
       getGenerativeModel: vi.fn(() => mockModel),
-    };
+    } as any;
 
     // Create service with flash model as default
     service = new GeminiGitDiffService(
-      mockGenAI,
+      mockGenAI as any,
       "gemini-flash-2.0", // Use Gemini Flash 2.0 as default model
       1024 * 1024,
       ["package-lock.json", "*.min.js"]

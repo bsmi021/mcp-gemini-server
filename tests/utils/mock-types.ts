@@ -1,10 +1,11 @@
+// Using vitest globals - see vitest.config.ts globals: true
 /**
  * Mock types for testing
  * This file contains type definitions for mocks used in tests
  */
+import type { Mock } from "vitest";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { McpClientService } from "../../src/services/mcp/McpClientService.js";
-import { vi, type Mock } from "vitest";
 
 /**
  * Mock Event Source States for testing

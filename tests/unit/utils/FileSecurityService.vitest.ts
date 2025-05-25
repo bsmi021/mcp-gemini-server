@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, afterEach, expect, vi } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 import * as path from "path";
 import * as fs from "fs/promises";
 import * as fsSync from "fs";

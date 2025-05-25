@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, afterEach, expect, vi } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 
@@ -12,7 +12,6 @@ describe("FileSecurityService Basic Operations", () => {
 
   // Test directories for our tests
   const testDir = path.resolve("./test-temp-dir");
-  const subDir = path.join(testDir, "sub-dir");
   const outsideDir = path.resolve("./outside-dir");
   const ALLOWED_DIR = path.join(testDir, "allowed");
 

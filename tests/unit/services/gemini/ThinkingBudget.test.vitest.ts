@@ -1,6 +1,5 @@
-import { describe, it, beforeEach, expect, vi } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 import { GeminiContentService } from "../../../../src/services/gemini/GeminiContentService.js";
-import { FileSecurityService } from "../../../../src/utils/FileSecurityService.js";
 import { GeminiChatService } from "../../../../src/services/gemini/GeminiChatService.js";
 import { GenerateContentResponse } from "@google/genai";
 import { FinishReason } from "../../../../src/types/googleGenAITypes.js";
@@ -49,8 +48,7 @@ describe("Thinking Budget Feature", () => {
       // Arrange
       const service = new GeminiContentService(
         mockGenAI as any,
-        "gemini-1.5-pro",
-        new FileSecurityService()
+        "gemini-1.5-pro"
       );
 
       // Act
@@ -72,16 +70,15 @@ describe("Thinking Budget Feature", () => {
 
       const requestConfig = args[0];
       expect(requestConfig).toBeTruthy();
-      expect(requestConfig.thinkingConfig).toBeTruthy();
-      expect(requestConfig.thinkingConfig.thinkingBudget).toBe(5000);
+      expect(requestConfig?.thinkingConfig).toBeTruthy();
+      expect(requestConfig?.thinkingConfig?.thinkingBudget).toBe(5000);
     });
 
     it("should map reasoningEffort to thinkingBudget values", async () => {
       // Arrange
       const service = new GeminiContentService(
         mockGenAI as any,
-        "gemini-1.5-pro",
-        new FileSecurityService()
+        "gemini-1.5-pro"
       );
 
       // Test different reasoning effort values
@@ -100,7 +97,11 @@ describe("Thinking Budget Feature", () => {
           prompt: "Test prompt",
           generationConfig: {
             thinkingConfig: {
-              reasoningEffort: testCase.reasoningEffort as any,
+              reasoningEffort: testCase.reasoningEffort as
+                | "none"
+                | "low"
+                | "medium"
+                | "high",
             },
           } as ExtendedGenerationConfig,
         });
@@ -113,8 +114,8 @@ describe("Thinking Budget Feature", () => {
 
         const requestConfig = args[0];
         expect(requestConfig).toBeTruthy();
-        expect(requestConfig.thinkingConfig).toBeTruthy();
-        expect(requestConfig.thinkingConfig.thinkingBudget).toBe(
+        expect(requestConfig?.thinkingConfig).toBeTruthy();
+        expect(requestConfig?.thinkingConfig?.thinkingBudget).toBe(
           testCase.expectedBudget
         );
       }
@@ -126,7 +127,6 @@ describe("Thinking Budget Feature", () => {
       const service = new GeminiContentService(
         mockGenAI as any,
         "gemini-1.5-pro",
-        new FileSecurityService(),
         defaultThinkingBudget
       );
 
@@ -143,8 +143,8 @@ describe("Thinking Budget Feature", () => {
 
       const requestConfig = args[0];
       expect(requestConfig).toBeTruthy();
-      expect(requestConfig.thinkingConfig).toBeTruthy();
-      expect(requestConfig.thinkingConfig.thinkingBudget).toBe(
+      expect(requestConfig?.thinkingConfig).toBeTruthy();
+      expect(requestConfig?.thinkingConfig?.thinkingBudget).toBe(
         defaultThinkingBudget
       );
     });
@@ -156,7 +156,6 @@ describe("Thinking Budget Feature", () => {
       const service = new GeminiContentService(
         mockGenAI as any,
         "gemini-1.5-pro",
-        new FileSecurityService(),
         defaultThinkingBudget
       );
 
@@ -178,8 +177,8 @@ describe("Thinking Budget Feature", () => {
 
       const requestConfig = args[0];
       expect(requestConfig).toBeTruthy();
-      expect(requestConfig.thinkingConfig).toBeTruthy();
-      expect(requestConfig.thinkingConfig.thinkingBudget).toBe(
+      expect(requestConfig?.thinkingConfig).toBeTruthy();
+      expect(requestConfig?.thinkingConfig?.thinkingBudget).toBe(
         configThinkingBudget
       );
     });
@@ -255,8 +254,8 @@ describe("Thinking Budget Feature", () => {
 
       const requestConfig = args[0];
       expect(requestConfig).toBeTruthy();
-      expect(requestConfig.thinkingConfig).toBeTruthy();
-      expect(requestConfig.thinkingConfig.thinkingBudget).toBe(6000);
+      expect(requestConfig?.thinkingConfig).toBeTruthy();
+      expect(requestConfig?.thinkingConfig?.thinkingBudget).toBe(6000);
     });
 
     it("should map reasoningEffort to thinkingBudget in chat session", async () => {
@@ -281,7 +280,11 @@ describe("Thinking Budget Feature", () => {
         const sessionId = chatService.startChatSession({
           generationConfig: {
             thinkingConfig: {
-              reasoningEffort: testCase.reasoningEffort as any,
+              reasoningEffort: testCase.reasoningEffort as
+                | "none"
+                | "low"
+                | "medium"
+                | "high",
             },
           } as ExtendedGenerationConfig,
         });
@@ -299,8 +302,8 @@ describe("Thinking Budget Feature", () => {
 
         const requestConfig = args[0];
         expect(requestConfig).toBeTruthy();
-        expect(requestConfig.thinkingConfig).toBeTruthy();
-        expect(requestConfig.thinkingConfig.thinkingBudget).toBe(
+        expect(requestConfig?.thinkingConfig).toBeTruthy();
+        expect(requestConfig?.thinkingConfig?.thinkingBudget).toBe(
           testCase.expectedBudget
         );
       }
@@ -340,8 +343,8 @@ describe("Thinking Budget Feature", () => {
 
       const requestConfig = args[0];
       expect(requestConfig).toBeTruthy();
-      expect(requestConfig.thinkingConfig).toBeTruthy();
-      expect(requestConfig.thinkingConfig.thinkingBudget).toBe(8000);
+      expect(requestConfig?.thinkingConfig).toBeTruthy();
+      expect(requestConfig?.thinkingConfig?.thinkingBudget).toBe(8000);
     });
   });
 });

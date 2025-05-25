@@ -51,11 +51,13 @@ export class ModelMigrationService {
 
   private migrateDeprecatedModelNames(): void {
     const deprecatedMappings = {
-      "gemini-1.5-flash-latest": "gemini-1.5-flash",
       "gemini-1.5-pro-latest": "gemini-1.5-pro",
+      "gemini-1.5-flash-latest": "gemini-1.5-flash",
       "gemini-flash-2.0": "gemini-2.0-flash",
       "gemini-2.5-pro": "gemini-2.5-pro-preview-05-06",
       "gemini-2.5-flash": "gemini-2.5-flash-preview-05-20",
+      "gemini-2.5-pro-exp-03-25": "gemini-2.5-pro-preview-05-06",
+      "gemini-2.5-flash-exp-latest": "gemini-2.5-flash-preview-05-20",
       "imagen-3.1-generate-003": "imagen-3.0-generate-002",
     };
 
@@ -215,11 +217,13 @@ export class ModelMigrationService {
     }
 
     const oldModelNames = [
-      "gemini-1.5-flash-latest",
       "gemini-1.5-pro-latest",
+      "gemini-1.5-flash-latest",
       "gemini-flash-2.0",
       "gemini-2.5-pro",
       "gemini-2.5-flash",
+      "gemini-2.5-pro-exp-03-25",
+      "gemini-2.5-flash-exp-latest",
       "imagen-3.1-generate-003",
     ];
 

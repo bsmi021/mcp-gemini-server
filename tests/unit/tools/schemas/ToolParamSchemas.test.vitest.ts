@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { exampleToolSchema } from "../../../../src/tools/schemas/exampleToolParams.js";
-import { geminiGenerateContentSchema } from "../../../../src/tools/schemas/geminiGenerateContentParams.js";
+// Using vitest globals - see vitest.config.ts globals: true
+import { exampleToolSchema } from "../../../../src/tools/exampleToolParams.js";
+import { geminiGenerateContentSchema } from "../../../../src/tools/geminiGenerateContentConsolidatedParams.js";
 import { writeToFileSchema } from "../../../../src/tools/schemas/writeToFileParams.js";
 
 /**

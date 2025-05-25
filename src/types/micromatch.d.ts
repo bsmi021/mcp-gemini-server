@@ -16,7 +16,7 @@ declare module "micromatch" {
     matchBase?: boolean;
     onMatch?: (match: string) => void;
     onResult?: (result: string) => void;
-    [key: string]: any;
+    [key: string]: unknown;
   }
 
   interface Micromatch {

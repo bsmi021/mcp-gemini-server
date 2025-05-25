@@ -4,7 +4,7 @@ import {
   ModelPreferencesSchema,
 } from "./schemas/CommonSchemas.js";
 
-export const TOOL_NAME_GENERATE_IMAGE = "gemini_generateImage";
+export const TOOL_NAME_GENERATE_IMAGE = "gemini_generate_image";
 
 // Tool Description
 export const TOOL_DESCRIPTION_GENERATE_IMAGE = `
@@ -37,8 +37,8 @@ export const stylePresetSchema = z
   ])
   .describe("Style preset to apply to the generated image.");
 
-// Reuse existing safety settings schema from content generation
-import { safetySettingSchema } from "./geminiGenerateContentParams.js";
+// Reuse existing safety settings schema from validation schemas
+import { SafetySettingSchema } from "../services/gemini/GeminiValidationSchemas.js";
 
 // Main parameters schema
 export const GEMINI_GENERATE_IMAGE_PARAMS = z.object({
@@ -65,7 +65,7 @@ export const GEMINI_GENERATE_IMAGE_PARAMS = z.object({
       "Optional. Number of images to generate (1-8). Defaults to 1 if not specified."
     ),
   safetySettings: z
-    .array(safetySettingSchema)
+    .array(SafetySettingSchema)
     .optional()
     .describe(
       "Optional. A list of safety settings to apply, overriding default model safety settings. Each setting specifies a harm category and a blocking threshold."

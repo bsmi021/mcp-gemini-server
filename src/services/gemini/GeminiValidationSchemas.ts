@@ -1,13 +1,7 @@
 import { z } from "zod";
-import {
-  SafetySetting,
-  GenerationConfig,
-  Content,
-  Part,
-  ThinkingConfig,
-} from "./GeminiTypes.js";
+import { SafetySetting } from "./GeminiTypes.js";
 import { HarmCategory, HarmBlockThreshold } from "@google/genai";
-import { FileMetadata } from "../../types/index.js";
+import type { RouteMessageParams } from "../GeminiService.js";
 
 /**
  * Validation schemas for Gemini API parameters
@@ -49,7 +43,7 @@ export const SafetySettingSchema = z.object({
 /**
  * Default safety settings to apply if none are provided
  */
-export const DEFAULT_SAFETY_SETTINGS: SafetySetting[] = [
+export const DEFAULT_SAFETY_SETTINGS = [
   {
     category: HarmCategory.HARM_CATEGORY_HARASSMENT,
     threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
@@ -66,7 +60,7 @@ export const DEFAULT_SAFETY_SETTINGS: SafetySetting[] = [
     category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
     threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
   },
-];
+] as SafetySetting[];
 
 /**
  * Schema for thinking configuration to control model reasoning
@@ -148,14 +142,6 @@ export const STYLE_PRESETS = [
  */
 
 /**
- * Schema for file data used in content generation
- */
-export const FileDataSchema = z.object({
-  fileUri: z.string().min(1),
-  mimeType: z.string().min(1).optional(),
-});
-
-/**
  * Schema for inline data used in content generation
  */
 export const InlineDataSchema = z.object({
@@ -169,7 +155,6 @@ export const InlineDataSchema = z.object({
 export const PartSchema = z.object({
   text: z.string().optional(),
   inlineData: InlineDataSchema.optional(),
-  fileData: FileDataSchema.optional(),
 });
 
 /**
@@ -178,17 +163,6 @@ export const PartSchema = z.object({
 export const ContentSchema = z.object({
   role: z.enum(["user", "model", "system"]).optional(),
   parts: z.array(PartSchema),
-});
-
-/**
- * Schema for file metadata
- */
-export const FileMetadataSchema = z.object({
-  name: z.string().min(1),
-  uri: z.string().min(1),
-  mimeType: z.string().min(1),
-  displayName: z.string().optional(),
-  sizeBytes: z.number().int().optional(),
 });
 
 /**
@@ -201,9 +175,7 @@ export const GenerateContentParamsSchema = z.object({
   safetySettings: z.array(SafetySettingSchema).optional(),
   systemInstruction: z.union([z.string(), ContentSchema]).optional(),
   cachedContentName: z.string().min(1).optional(),
-  fileReferenceOrInlineData: z
-    .union([FileMetadataSchema, z.string()])
-    .optional(),
+  inlineData: z.string().optional(),
   inlineDataMimeType: z.string().optional(),
 });
 
@@ -222,7 +194,7 @@ export const RouteMessageParamsSchema = z.object({
   models: z.array(z.string().min(1)).min(1),
   routingPrompt: z.string().min(1).optional(),
   defaultModel: z.string().min(1).optional(),
-  generationConfig: GenerationConfigSchema,
+  generationConfig: GenerationConfigSchema.optional(),
   safetySettings: z.array(SafetySettingSchema).optional(),
   systemInstruction: z.union([z.string(), ContentSchema]).optional(),
 });
@@ -275,7 +247,7 @@ export function validateImageGenerationParams(
  * @throws ZodError if validation fails
  */
 export function validateGenerateContentParams(
-  params: Record<string, any>
+  params: Record<string, unknown>
 ): ValidatedGenerateContentParams {
   return GenerateContentParamsSchema.parse(params);
 }
@@ -287,7 +259,7 @@ export function validateGenerateContentParams(
  * @throws ZodError if validation fails
  */
 export function validateRouteMessageParams(
-  params: Record<string, any>
+  params: RouteMessageParams
 ): ValidatedRouteMessageParams {
   return RouteMessageParamsSchema.parse(params);
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 import { GeminiService } from "../../../../src/services/GeminiService.js";
 import { ImagePart } from "../../../../src/services/gemini/GeminiTypes.js";
 

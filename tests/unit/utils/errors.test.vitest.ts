@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 // Import directly from the MCP SDK to ensure we're using the same class reference
 import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 // Import local error classes
@@ -9,6 +9,8 @@ import {
   ServiceError,
   GeminiApiError,
   mapToMcpError,
+  mapToolErrorToMcpError,
+  ToolErrorLike,
 } from "../../../src/utils/errors.js";
 
 describe("mapToMcpError", () => {
@@ -192,5 +194,128 @@ describe("mapToMcpError", () => {
     if ("data" in mappedError) {
       expect(mappedError.data).toBeDefined();
     }
+  });
+});
+
+describe("mapToolErrorToMcpError", () => {
+  const TOOL_NAME = "test_tool";
+
+  it("should handle ToolErrorLike objects with code and message", () => {
+    const toolError: ToolErrorLike = {
+      code: "INVALID_ARGUMENT",
+      message: "Invalid parameter provided",
+      details: { parameter: "value" },
+    };
+
+    const mappedError = mapToolErrorToMcpError(toolError, TOOL_NAME);
+
+    expect(mappedError).toBeInstanceOf(McpError);
+    expect(mappedError.code).toBe(ErrorCode.InvalidParams);
+    expect(mappedError.message).toContain("Invalid parameter provided");
+  });
+
+  it("should map QUOTA and RATE_LIMIT codes to InternalError", () => {
+    const quotaError: ToolErrorLike = {
+      code: "QUOTA_EXCEEDED",
+      message: "API quota exceeded",
+    };
+
+    const mappedError = mapToolErrorToMcpError(quotaError, TOOL_NAME);
+
+    expect(mappedError.code).toBe(ErrorCode.InternalError);
+    expect(mappedError.message).toContain("API quota or rate limit exceeded");
+  });
+
+  it("should map PERMISSION and AUTH codes to InvalidRequest", () => {
+    const permissionError: ToolErrorLike = {
+      code: "PERMISSION_DENIED",
+      message: "Permission denied",
+    };
+
+    const mappedError = mapToolErrorToMcpError(permissionError, TOOL_NAME);
+
+    expect(mappedError.code).toBe(ErrorCode.InvalidRequest);
+    expect(mappedError.message).toContain("Permission denied");
+  });
+
+  it("should map NOT_FOUND codes to InvalidRequest", () => {
+    const notFoundError: ToolErrorLike = {
+      code: "RESOURCE_NOT_FOUND",
+      message: "Resource not found",
+    };
+
+    const mappedError = mapToolErrorToMcpError(notFoundError, TOOL_NAME);
+
+    expect(mappedError.code).toBe(ErrorCode.InvalidRequest);
+    expect(mappedError.message).toContain("Resource not found");
+  });
+
+  it("should map INVALID and ARGUMENT codes to InvalidParams", () => {
+    const invalidError: ToolErrorLike = {
+      code: "INVALID_ARGUMENT",
+      message: "Invalid argument",
+    };
+
+    const mappedError = mapToolErrorToMcpError(invalidError, TOOL_NAME);
+
+    expect(mappedError.code).toBe(ErrorCode.InvalidParams);
+    expect(mappedError.message).toContain("Invalid parameters");
+  });
+
+  it("should map UNSUPPORTED codes to InvalidRequest", () => {
+    const unsupportedError: ToolErrorLike = {
+      code: "OPERATION_NOT_SUPPORTED",
+      message: "Operation not supported",
+    };
+
+    const mappedError = mapToolErrorToMcpError(unsupportedError, TOOL_NAME);
+
+    expect(mappedError.code).toBe(ErrorCode.InvalidRequest);
+    expect(mappedError.message).toContain("Operation not supported");
+  });
+
+  it("should handle objects without code property", () => {
+    const toolError = {
+      message: "Generic error message",
+      details: { info: "additional info" },
+    };
+
+    const mappedError = mapToolErrorToMcpError(toolError, TOOL_NAME);
+
+    expect(mappedError.code).toBe(ErrorCode.InternalError);
+    expect(mappedError.message).toContain("Generic error message");
+  });
+
+  it("should handle non-object errors", () => {
+    const simpleError = "Simple string error";
+
+    const mappedError = mapToolErrorToMcpError(simpleError, TOOL_NAME);
+
+    expect(mappedError.code).toBe(ErrorCode.InternalError);
+    expect(mappedError.message).toContain(`Error in ${TOOL_NAME}`);
+  });
+
+  it("should handle null and undefined errors", () => {
+    const nullError = mapToolErrorToMcpError(null, TOOL_NAME);
+    const undefinedError = mapToolErrorToMcpError(undefined, TOOL_NAME);
+
+    expect(nullError.code).toBe(ErrorCode.InternalError);
+    expect(undefinedError.code).toBe(ErrorCode.InternalError);
+    expect(nullError.message).toContain(`Error in ${TOOL_NAME}`);
+    expect(undefinedError.message).toContain(`Error in ${TOOL_NAME}`);
+  });
+
+  it("should preserve error details when available", () => {
+    const toolError: ToolErrorLike = {
+      code: "TEST_ERROR",
+      message: "Test error message",
+      details: { context: "test context", id: 123 },
+    };
+
+    const mappedError = mapToolErrorToMcpError(toolError, TOOL_NAME);
+
+    // Check that details are preserved (assuming McpError supports details/data)
+    expect(mappedError).toBeDefined();
+    expect(mappedError.message).toContain("Test error message");
   });
 });

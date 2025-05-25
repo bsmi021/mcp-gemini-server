@@ -5,15 +5,12 @@ import {
   mapGeminiError,
 } from "../../utils/geminiErrors.js";
 import { logger } from "../../utils/logger.js";
-import { FileMetadata } from "../../types/index.js";
-import { FileSecurityService } from "../../utils/FileSecurityService.js";
 import {
   Content,
   GenerationConfig,
   SafetySetting,
   Part,
   ThinkingConfig,
-  FileId,
   ImagePart,
 } from "./GeminiTypes.js";
 import { ZodError } from "zod";
@@ -59,7 +56,7 @@ interface GenerateContentParams {
   safetySettings?: SafetySetting[];
   systemInstruction?: Content | string;
   cachedContentName?: string;
-  fileReferenceOrInlineData?: FileId | ImagePart | FileMetadata | string;
+  fileReferenceOrInlineData?: ImagePart | string;
   inlineDataMimeType?: string;
   urlContext?: UrlContextParams;
 }
@@ -88,7 +85,6 @@ export class GeminiContentService {
   private genAI: GoogleGenAI;
   private defaultModelName?: string;
   private defaultThinkingBudget?: number;
-  private fileSecurityService: FileSecurityService;
   private retryService: RetryService;
   private configManager: ConfigurationManager;
   private urlContextService: GeminiUrlContextService;
@@ -97,19 +93,16 @@ export class GeminiContentService {
    * Creates a new instance of the GeminiContentService.
    * @param genAI The GoogleGenAI instance to use for API calls
    * @param defaultModelName Optional default model name to use if not specified in method calls
-   * @param fileSecurityService Optional security service for file path validation (a new instance is created if not provided)
    * @param defaultThinkingBudget Optional default budget for reasoning (thinking) tokens
    */
   constructor(
     genAI: GoogleGenAI,
     defaultModelName?: string,
-    fileSecurityService?: FileSecurityService,
     defaultThinkingBudget?: number
   ) {
     this.genAI = genAI;
     this.defaultModelName = defaultModelName;
     this.defaultThinkingBudget = defaultThinkingBudget;
-    this.fileSecurityService = fileSecurityService || new FileSecurityService();
     this.retryService = new RetryService(DEFAULT_RETRY_OPTIONS);
     this.configManager = ConfigurationManager.getInstance();
     this.urlContextService = new GeminiUrlContextService(this.configManager);
@@ -133,7 +126,18 @@ export class GeminiContentService {
     try {
       // Validate parameters using Zod schema
       try {
-        validateGenerateContentParams(params);
+        // Create a proper object for validation
+        const validationParams: Record<string, unknown> = {
+          prompt: params.prompt,
+          modelName: params.modelName,
+          generationConfig: params.generationConfig,
+          safetySettings: params.safetySettings,
+          systemInstruction: params.systemInstruction,
+          cachedContentName: params.cachedContentName,
+          inlineData: params.fileReferenceOrInlineData,
+          inlineDataMimeType: params.inlineDataMimeType,
+        };
+        validateGenerateContentParams(validationParams);
       } catch (validationError: unknown) {
         if (validationError instanceof ZodError) {
           const fieldErrors = validationError.errors
@@ -289,18 +293,10 @@ export class GeminiContentService {
     // Add the user's prompt after URL context
     contentParts.push({ text: prompt });
 
-    // Add file reference or inline data if provided
+    // Add inline data if provided
     if (fileReferenceOrInlineData) {
       if (typeof fileReferenceOrInlineData === "string") {
-        if (fileReferenceOrInlineData.startsWith("files/")) {
-          // Handle FileId format (files/{id})
-          contentParts.push({
-            fileData: {
-              fileUri: `https://generativelanguage.googleapis.com/v1beta/${fileReferenceOrInlineData}`,
-              mimeType: "application/octet-stream", // Default, actual type determined by API
-            },
-          });
-        } else if (inlineDataMimeType) {
+        if (inlineDataMimeType) {
           // Handle inline base64 data
           contentParts.push({
             inlineData: {
@@ -310,7 +306,7 @@ export class GeminiContentService {
           });
         } else {
           throw new GeminiValidationError(
-            "For string file data, either provide a FileId (files/{id}) or include inlineDataMimeType for base64 data",
+            "For inline data, inlineDataMimeType is required",
             "fileReferenceOrInlineData"
           );
         }
@@ -329,35 +325,15 @@ export class GeminiContentService {
               mimeType: imagePart.mimeType,
             },
           });
-        } else if (imagePart.type === "url") {
-          contentParts.push({
-            fileData: {
-              fileUri: imagePart.data,
-              mimeType: imagePart.mimeType,
-            },
-          });
         } else {
           throw new GeminiValidationError(
-            "ImagePart type must be either 'base64' or 'url'",
+            "URL-based images are not supported. Please provide base64-encoded image data instead.",
             "fileReferenceOrInlineData"
           );
         }
-      } else if (
-        typeof fileReferenceOrInlineData === "object" &&
-        "name" in fileReferenceOrInlineData &&
-        "uri" in fileReferenceOrInlineData
-      ) {
-        // Handle FileMetadata type
-        const fileMetadata = fileReferenceOrInlineData as FileMetadata;
-        contentParts.push({
-          fileData: {
-            fileUri: fileMetadata.uri,
-            mimeType: fileMetadata.mimeType,
-          },
-        });
       } else {
         throw new GeminiValidationError(
-          "Invalid file reference or inline data provided. Expected FileId, ImagePart, FileMetadata, or base64 string with mimeType",
+          "Invalid inline data provided. Expected base64 string with mimeType or ImagePart object",
           "fileReferenceOrInlineData"
         );
       }
@@ -448,7 +424,18 @@ export class GeminiContentService {
     try {
       // Validate parameters using Zod schema
       try {
-        validateGenerateContentParams(params);
+        // Create a proper object for validation
+        const validationParams: Record<string, unknown> = {
+          prompt: params.prompt,
+          modelName: params.modelName,
+          generationConfig: params.generationConfig,
+          safetySettings: params.safetySettings,
+          systemInstruction: params.systemInstruction,
+          cachedContentName: params.cachedContentName,
+          inlineData: params.fileReferenceOrInlineData,
+          inlineDataMimeType: params.inlineDataMimeType,
+        };
+        validateGenerateContentParams(validationParams);
       } catch (validationError: unknown) {
         if (validationError instanceof ZodError) {
           const fieldErrors = validationError.errors

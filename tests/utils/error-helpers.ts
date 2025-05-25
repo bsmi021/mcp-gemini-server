@@ -30,14 +30,15 @@ export function isMcpError(obj: unknown): boolean {
   }
 
   // Manual property checks as fallback
+  const errorLike = obj as { code?: unknown; message?: unknown };
   return (
     obj !== null &&
     typeof obj === "object" &&
     "code" in obj &&
     "message" in obj &&
-    typeof (obj as any).code === "string" &&
-    typeof (obj as any).message === "string" &&
-    Object.values(ErrorCode).includes((obj as any).code as ErrorCode)
+    typeof errorLike.code === "string" &&
+    typeof errorLike.message === "string" &&
+    Object.values(ErrorCode).includes(errorLike.code as ErrorCode)
   );
 }
 
@@ -56,7 +57,11 @@ export function ensureMcpError(obj: unknown): McpError {
   }
 
   if (obj && typeof obj === "object" && "code" in obj && "message" in obj) {
-    const errObj = obj as any;
+    const errObj = obj as {
+      code: unknown;
+      message: unknown;
+      details?: unknown;
+    };
     return new McpError(
       errObj.code as ErrorCode,
       errObj.message as string,

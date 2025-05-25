@@ -1,16 +1,13 @@
-import { describe, it, expect } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 import {
   ToolSchema,
   ToolResponseSchema,
-  FunctionParameterTypeSchema,
   FunctionParameterSchema,
   FunctionDeclarationSchema,
-  ToolConfigSchema,
 } from "../../../../src/tools/schemas/ToolSchemas.js";
 
 import {
   HarmCategorySchema,
-  HarmBlockThresholdSchema,
   SafetySettingSchema,
   ThinkingConfigSchema,
   GenerationConfigSchema,

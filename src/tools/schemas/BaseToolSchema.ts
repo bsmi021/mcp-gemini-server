@@ -49,13 +49,13 @@ export function createToolSchema<T extends z.ZodRawShape>(
   params: T
 ): ToolSchemaDefinition<T> {
   const toolSchema = z.object(params);
-  type ToolParams = z.infer<typeof toolSchema>;
 
   return {
     TOOL_NAME: name,
     TOOL_DESCRIPTION: description,
     TOOL_PARAMS: params,
     toolSchema,
-    ToolParams: undefined as unknown as ToolParams,
+    // This is a type-level property, not a runtime value
+    ToolParams: {} as z.infer<typeof toolSchema>,
   };
 }

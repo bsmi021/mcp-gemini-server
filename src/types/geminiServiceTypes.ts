@@ -94,23 +94,6 @@ export interface GeminiServiceConfig {
 }
 
 /**
- * Represents the metadata of a file managed by the Gemini API.
- * Based on the structure returned by the @google/genai SDK's File API.
- */
-export interface FileMetadata {
-  name: string;
-  displayName?: string;
-  mimeType: string;
-  sizeBytes: string;
-  createTime: string;
-  updateTime: string;
-  expirationTime?: string;
-  sha256Hash: string;
-  uri: string;
-  state: "PROCESSING" | "ACTIVE" | "FAILED" | string;
-}
-
-/**
  * Represents the metadata of cached content managed by the Gemini API.
  * Based on the structure returned by the @google/genai SDK's Caching API.
  */
@@ -131,13 +114,6 @@ const BlobSchema = z
   .object({
     mimeType: z.string(),
     data: z.string(),
-  })
-  .strict();
-
-const FileDataSchema = z
-  .object({
-    mimeType: z.string(),
-    fileUri: z.string().url(),
   })
   .strict();
 
@@ -165,7 +141,6 @@ export const PartSchema = z
     inlineData: BlobSchema.optional(),
     functionCall: FunctionCallSchema.optional(),
     functionResponse: FunctionResponseSchema.optional(),
-    fileData: FileDataSchema.optional(),
     // Add other part types like executableCode, codeExecutionResult, videoMetadata if needed later
   })
   .strict()
@@ -180,7 +155,7 @@ export const PartSchema = z
     },
     {
       message:
-        "Exactly one field must be set in a Part object (text, inlineData, functionCall, functionResponse, or fileData).",
+        "Exactly one field must be set in a Part object (text, inlineData, functionCall, or functionResponse).",
     }
   );
 

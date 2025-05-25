@@ -176,9 +176,13 @@ export class FileSecurityService {
     }
 
     // Check if the file exists (if required)
-    if (mustExist && !fsSync.existsSync(normalizedPath)) {
-      logger.warn(`File not found: ${normalizedPath}`);
-      throw new ValidationError(`File not found: ${normalizedPath}`);
+    if (mustExist) {
+      try {
+        fsSync.accessSync(normalizedPath, fsSync.constants.F_OK);
+      } catch (error) {
+        logger.warn(`File not found: ${normalizedPath}`);
+        throw new ValidationError(`File not found: ${normalizedPath}`);
+      }
     }
 
     logger.debug(`Validated path: ${normalizedPath}`);
@@ -468,15 +472,16 @@ export class FileSecurityService {
 
     if (customBaseDir) {
       // Validate that the custom base directory exists
-      if (!fsSync.existsSync(customBaseDir)) {
+      try {
+        fsSync.accessSync(customBaseDir, fsSync.constants.F_OK);
+        logger.info(`File operations restricted to: ${customBaseDir}`);
+        service.setAllowedDirectories([customBaseDir]);
+      } catch (error) {
         logger.warn(
           `Configured GEMINI_SAFE_FILE_BASE_DIR does not exist: ${customBaseDir}`
         );
         logger.warn(`Falling back to default directory: ${process.cwd()}`);
         service.setAllowedDirectories([process.cwd()]);
-      } else {
-        logger.info(`File operations restricted to: ${customBaseDir}`);
-        service.setAllowedDirectories([customBaseDir]);
       }
     } else {
       logger.info(

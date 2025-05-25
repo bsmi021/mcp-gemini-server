@@ -1,13 +1,10 @@
 // Type augmentation for @google/genai package
 import type {
   GenerationConfig,
-  SafetySetting,
   Content,
   Part,
   Tool,
   ToolConfig,
-  HarmCategory,
-  HarmBlockThreshold,
 } from "@google/genai";
 
 // Add additional types from our codebase
@@ -51,35 +48,13 @@ declare module "@google/genai" {
     };
   }
 
-  export interface FileMetadata {
-    name: string;
-    sizeBytes: number;
-    createTime: string;
-    updateTime: string;
-    contentType: string;
-    state: string;
-    displayName?: string;
-  }
-
-  // Safety setting types
-  export enum HarmCategory {
-    HARM_CATEGORY_HARASSMENT = "HARM_CATEGORY_HARASSMENT",
-    HARM_CATEGORY_HATE_SPEECH = "HARM_CATEGORY_HATE_SPEECH",
-    HARM_CATEGORY_SEXUALLY_EXPLICIT = "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-    HARM_CATEGORY_DANGEROUS_CONTENT = "HARM_CATEGORY_DANGEROUS_CONTENT",
-  }
-
-  export enum HarmBlockThreshold {
-    BLOCK_NONE = "BLOCK_NONE",
-    BLOCK_LOW_AND_ABOVE = "BLOCK_LOW_AND_ABOVE",
-    BLOCK_MEDIUM_AND_ABOVE = "BLOCK_MEDIUM_AND_ABOVE",
-    BLOCK_HIGH_AND_ABOVE = "BLOCK_HIGH_AND_ABOVE",
-  }
-
-  export interface SafetySetting {
-    category: HarmCategory;
-    threshold: HarmBlockThreshold;
-  }
+  // Safety setting types are already defined in @google/genai package
+  // We just need to re-export them from the module declaration
+  export {
+    HarmCategory,
+    HarmBlockThreshold,
+    SafetySetting,
+  } from "@google/genai";
 
   // Define the GenerativeModel interface
   export interface GenerativeModel {
@@ -158,4 +133,6 @@ declare module "@google/genai" {
     ): Promise<{ stream: AsyncGenerator<{ text(): string }> }>;
     getHistory(): Content[];
   }
+
+  // We can add specific Google GenAI types if needed
 }

@@ -1,4 +1,3 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   TOOL_NAME_GENERATE_IMAGE,
   TOOL_DESCRIPTION_GENERATE_IMAGE,
@@ -8,12 +7,14 @@ import {
 import { GeminiService } from "../services/index.js";
 import { logger } from "../utils/index.js";
 import { mapToMcpError } from "../utils/errors.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type {
   SafetySetting,
   HarmCategory,
   HarmBlockThreshold,
 } from "@google/genai";
 import { ImageGenerationResult } from "../types/index.js";
+import type { NewGeminiServiceToolObject } from "./registration/ToolAdapter.js";
 
 // Helper function to convert safety settings from schema to SDK types
 const convertSafetySettings = (
@@ -28,20 +29,22 @@ const convertSafetySettings = (
 };
 
 /**
- * Registers the gemini_generateImage tool with the MCP server.
- *
- * @param server - The McpServer instance.
- * @param serviceInstance - An instance of the GeminiService.
+ * Gemini Generate Image Tool - New format with dependency injection
  */
-export const geminiGenerateImageTool = (server: McpServer): void => {
-  // Get the GeminiService instance
-  const serviceInstance = new GeminiService();
+export const geminiGenerateImageTool: NewGeminiServiceToolObject<
+  GeminiGenerateImageArgs,
+  CallToolResult
+> = {
+  name: TOOL_NAME_GENERATE_IMAGE,
+  description: TOOL_DESCRIPTION_GENERATE_IMAGE,
+  inputSchema: GEMINI_GENERATE_IMAGE_PARAMS.shape,
   /**
-   * Processes the request for the gemini_generateImage tool.
+   * Processes the request for the gemini_generate_image tool.
    * @param args - The arguments object matching GEMINI_GENERATE_IMAGE_PARAMS.
+   * @param service - The GeminiService instance injected via dependency injection.
    * @returns Base64-encoded generated images with metadata for MCP.
    */
-  const processRequest = async (args: GeminiGenerateImageArgs) => {
+  execute: async (args: GeminiGenerateImageArgs, service: GeminiService) => {
     logger.debug(`Received ${TOOL_NAME_GENERATE_IMAGE} request:`, {
       model: args.modelName,
       resolution: args.resolution,
@@ -49,7 +52,7 @@ export const geminiGenerateImageTool = (server: McpServer): void => {
     }); // Avoid logging full prompt for privacy/security
 
     try {
-      // Extract arguments - Zod parsing happens automatically via server.tool
+      // Extract arguments
       const {
         modelName,
         prompt,
@@ -63,7 +66,7 @@ export const geminiGenerateImageTool = (server: McpServer): void => {
         modelPreferences,
       } = args;
 
-      const result: ImageGenerationResult = await serviceInstance.generateImage(
+      const result: ImageGenerationResult = await service.generateImage(
         prompt,
         modelName,
         resolution,
@@ -90,7 +93,7 @@ export const geminiGenerateImageTool = (server: McpServer): void => {
           // Include a text description of the generated images
           {
             type: "text" as const,
-            text: `Generated ${result.images.length} ${resolution || "1024x1024"} image(s) from prompt.`,
+            text: `Generated ${result.images.length} ${args.resolution || "1024x1024"} image(s) from prompt.`,
           },
           // Include the generated images as image content types
           ...result.images.map((img) => ({
@@ -106,15 +109,5 @@ export const geminiGenerateImageTool = (server: McpServer): void => {
       // Use the centralized error mapping utility to ensure consistent error handling
       throw mapToMcpError(error, TOOL_NAME_GENERATE_IMAGE);
     }
-  };
-
-  // Register the tool with the server
-  server.tool(
-    TOOL_NAME_GENERATE_IMAGE,
-    TOOL_DESCRIPTION_GENERATE_IMAGE,
-    GEMINI_GENERATE_IMAGE_PARAMS.shape, // Use the shape property of the zod object
-    processRequest
-  );
-
-  logger.info(`Tool registered: ${TOOL_NAME_GENERATE_IMAGE}`);
+  },
 };

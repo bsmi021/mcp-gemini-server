@@ -6,7 +6,7 @@ import {
   EncodingSchema,
 } from "./CommonSchemas.js";
 
-const TOOL_NAME = "writeToFile";
+const TOOL_NAME = "write_to_file";
 
 const TOOL_DESCRIPTION =
   "Writes the given content to a specified file path. The path must be within an allowed directory.";

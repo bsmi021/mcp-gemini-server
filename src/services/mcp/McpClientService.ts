@@ -38,7 +38,7 @@ interface ExtendedEventSource extends EventSource {
 
 export interface McpRequest {
   id: string;
-  method: "listTools" | "callTool";
+  method: "listTools" | "callTool" | "initialize";
   params?: Record<string, unknown>;
 }
 
@@ -630,7 +630,7 @@ export class McpClientService {
                   if (parsedData.error) {
                     reject(
                       new SdkMcpError(
-                        (parsedData.error.code as unknown as ErrorCode) ||
+                        (parsedData.error.code as ErrorCode) ||
                           ErrorCode.InternalError,
                         parsedData.error.message || "Tool execution error",
                         parsedData.error.data
@@ -962,13 +962,12 @@ export class McpClientService {
           );
         }
 
-        const mcpResponse: McpResponse = await response.json();
+        const mcpResponse = (await response.json()) as McpResponse;
 
         if (mcpResponse.error) {
           throw new SdkMcpError(
-            (mcpResponse.error.code as unknown as ErrorCode) ||
-              ErrorCode.InternalError,
-            `MCP error: ${mcpResponse.error.message}`,
+            ErrorCode.InternalError,
+            `MCP error: ${mcpResponse.error.message} (code: ${mcpResponse.error.code})`,
             mcpResponse.error.data
           );
         }
@@ -1014,10 +1013,11 @@ export class McpClientService {
 
         // Store the promise resolution functions
         this.pendingStdioRequests.get(serverId)!.set(requestId, {
-          resolve: resolve as unknown as (
-            value: Record<string, unknown> | Array<unknown>
-          ) => void,
-          reject: reject as (reason: Error | McpError) => void,
+          resolve: (value) => {
+            // Type-safe resolution for tool definitions
+            resolve(value as ToolDefinition[]);
+          },
+          reject: reject,
         });
 
         // Set up a timeout to automatically reject this request if it takes too long
@@ -1064,6 +1064,149 @@ export class McpClientService {
 
           reject(
             new Error(`Failed to send request to stdio connection ${serverId}`)
+          );
+        }
+      });
+    }
+
+    // This should never be reached due to the validateConnectionExists check above
+    throw new McpError(
+      ErrorCode.InvalidRequest,
+      `No connection found with ID ${serverId}`
+    );
+  }
+  /**
+   * Gets server information from an MCP server.
+   * @param serverId - The ID of the connection to use.
+   * @returns A promise that resolves to the server information.
+   * @throws {McpError} Throws an error if the parameters are invalid or the connection doesn't exist.
+   */
+  public async getServerInfo(
+    serverId: string
+  ): Promise<Record<string, unknown>> {
+    // Validate serverId
+    this.validateServerId(serverId);
+
+    // Check if connection exists
+    this.validateConnectionExists(serverId);
+
+    logger.debug(`Getting server info for connection: ${serverId}`);
+
+    // Check if this is an SSE connection
+    if (this.activeSseConnections.has(serverId)) {
+      const connection = this.activeSseConnections.get(serverId)!;
+      connection.lastActivityTimestamp = Date.now();
+
+      // For SSE connections, we'll make an HTTP request to get server info
+      const baseUrl = connection.baseUrl;
+      const infoUrl = `${baseUrl}/info`;
+
+      try {
+        const response = await this.fetchWithTimeout(
+          infoUrl,
+          {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+          McpClientService.DEFAULT_REQUEST_TIMEOUT_MS,
+          `Server info request timed out for ${serverId}`
+        );
+
+        if (!response.ok) {
+          throw new McpError(
+            ErrorCode.InternalError,
+            `Server info request failed with status ${response.status}: ${response.statusText}`
+          );
+        }
+
+        const serverInfo = await response.json();
+        return serverInfo as Record<string, unknown>;
+      } catch (error) {
+        logger.error(
+          `Error getting server info for SSE connection ${serverId}:`,
+          error
+        );
+        throw new McpError(
+          ErrorCode.InternalError,
+          `Failed to get server info: ${error instanceof Error ? error.message : "Unknown error"}`
+        );
+      }
+    }
+
+    // Check if this is a stdio connection
+    if (this.activeStdioConnections.has(serverId)) {
+      const connection = this.activeStdioConnections.get(serverId)!;
+      connection.lastActivityTimestamp = Date.now();
+
+      // For stdio connections, send an initialize request
+      const requestId = uuidv4();
+      const request: McpRequest = {
+        id: requestId,
+        method: "initialize",
+        params: {
+          protocolVersion: "2024-11-05",
+          capabilities: {},
+          clientInfo: {
+            name: "mcp-gemini-server",
+            version: "1.0.0",
+          },
+        },
+      };
+
+      return new Promise<Record<string, unknown>>((resolve, reject) => {
+        // Set up timeout for the request
+        const timeout = setTimeout(() => {
+          // Clean up the pending request
+          const pendingRequests = this.pendingStdioRequests.get(serverId);
+          if (pendingRequests) {
+            pendingRequests.delete(requestId);
+            if (pendingRequests.size === 0) {
+              this.pendingStdioRequests.delete(serverId);
+            }
+          }
+
+          reject(
+            new McpError(
+              ErrorCode.InternalError,
+              `Server info request timed out for ${serverId} after ${McpClientService.DEFAULT_REQUEST_TIMEOUT_MS}ms`
+            )
+          );
+        }, McpClientService.DEFAULT_REQUEST_TIMEOUT_MS);
+
+        // Store the request handlers
+        if (!this.pendingStdioRequests.has(serverId)) {
+          this.pendingStdioRequests.set(serverId, new Map());
+        }
+        this.pendingStdioRequests.get(serverId)!.set(requestId, {
+          resolve: (result) => {
+            clearTimeout(timeout);
+            resolve(result as Record<string, unknown>);
+          },
+          reject: (error) => {
+            clearTimeout(timeout);
+            reject(error);
+          },
+        });
+
+        // Send the request
+        const success = this.sendToStdio(serverId, request);
+        if (!success) {
+          // Clean up the pending request
+          const pendingRequests = this.pendingStdioRequests.get(serverId);
+          if (pendingRequests) {
+            pendingRequests.delete(requestId);
+            if (pendingRequests.size === 0) {
+              this.pendingStdioRequests.delete(serverId);
+            }
+          }
+          clearTimeout(timeout);
+          reject(
+            new McpError(
+              ErrorCode.InternalError,
+              `Failed to send server info request to ${serverId}`
+            )
           );
         }
       });
@@ -1158,13 +1301,12 @@ export class McpClientService {
           );
         }
 
-        const mcpResponse: McpResponse = await response.json();
+        const mcpResponse = (await response.json()) as McpResponse;
 
         if (mcpResponse.error) {
           throw new SdkMcpError(
-            (mcpResponse.error.code as unknown as ErrorCode) ||
-              ErrorCode.InternalError,
-            `MCP error: ${mcpResponse.error.message}`,
+            ErrorCode.InternalError,
+            `MCP error: ${mcpResponse.error.message} (code: ${mcpResponse.error.code})`,
             mcpResponse.error.data
           );
         }
@@ -1217,10 +1359,11 @@ export class McpClientService {
 
         // Store the promise resolution functions
         this.pendingStdioRequests.get(serverId)!.set(requestId, {
-          resolve: resolve as unknown as (
-            value: Record<string, unknown> | Array<unknown>
-          ) => void,
-          reject: reject as (reason: Error | McpError) => void,
+          resolve: (value) => {
+            // Type-safe resolution for tool call results
+            resolve(value as Record<string, unknown>);
+          },
+          reject: reject,
         });
 
         // Set up a timeout to automatically reject this request if it takes too long

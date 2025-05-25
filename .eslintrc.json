@@ -1,4 +1,4 @@
-﻿{
+{
   "root": true,
   "parser": "@typescript-eslint/parser",
   "plugins": [
@@ -8,13 +8,13 @@
   "extends": [
     "eslint:recommended",
     "plugin:@typescript-eslint/recommended",
-    "prettier" // Make sure this is last
+    "prettier"
   ],
   "rules": {
     "prettier/prettier": "warn",
     "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
-    "@typescript-eslint/no-explicit-any": "warn", // Use warn instead of error initially
-    "no-console": "off" // Allow console logging for server apps, or configure properly
+    "@typescript-eslint/no-explicit-any": "warn",
+    "no-console": "off"
   },
   "env": {
     "node": true,
@@ -23,5 +23,13 @@
   "parserOptions": {
     "ecmaVersion": "latest",
     "sourceType": "module"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["tests/**/*.ts", "tests/**/*.vitest.ts"],
+      "rules": {
+        "@typescript-eslint/no-explicit-any": "off"
+      }
+    }
+  ]
 }

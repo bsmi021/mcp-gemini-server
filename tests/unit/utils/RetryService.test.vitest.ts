@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, afterEach, expect, vi } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 import { RetryService } from "../../../src/utils/RetryService.js";
 
 // Test helper to simulate multiple failures before success
@@ -49,7 +49,7 @@ describe("RetryService", () => {
     beforeEach(() => {
       delaysCollected = [];
       onRetryMock = vi.fn(
-        (error: unknown, attempt: number, delayMs: number) => {
+        (_error: unknown, _attempt: number, delayMs: number) => {
           delaysCollected.push(delayMs);
         }
       );
@@ -223,15 +223,15 @@ describe("RetryService", () => {
         maxDelayMs: 1000,
         backoffFactor: 2,
         jitter: false,
-        onRetry: (error: unknown, attempt: number, delayMs: number) => {
+        onRetry: (_error: unknown, _attempt: number, delayMs: number) => {
           delays.push(delayMs);
         },
       });
 
       // Direct access to the private method for testing
-      const delay1 = (testRetryService as any)["calculateDelay"](0);
-      const delay2 = (testRetryService as any)["calculateDelay"](1);
-      const delay3 = (testRetryService as any)["calculateDelay"](2);
+      const delay1 = (testRetryService as any).calculateDelay(0);
+      const delay2 = (testRetryService as any).calculateDelay(1);
+      const delay3 = (testRetryService as any).calculateDelay(2);
 
       // Verify calculated delays
       expect(delay1).toBe(100);
@@ -250,10 +250,10 @@ describe("RetryService", () => {
       });
 
       // Test calculated delays directly
-      const delay1 = (testRetryService as any)["calculateDelay"](0);
-      const delay2 = (testRetryService as any)["calculateDelay"](1);
-      const delay3 = (testRetryService as any)["calculateDelay"](2); // Should be capped
-      const delay4 = (testRetryService as any)["calculateDelay"](3); // Should be capped
+      const delay1 = (testRetryService as any).calculateDelay(0);
+      const delay2 = (testRetryService as any).calculateDelay(1);
+      const delay3 = (testRetryService as any).calculateDelay(2); // Should be capped
+      const delay4 = (testRetryService as any).calculateDelay(3); // Should be capped
 
       // Verify calculated delays
       expect(delay1).toBe(100);

@@ -114,7 +114,7 @@ export class RetryService {
 
     // Handle HTTP status code errors
     if (typeof error === "object" && error !== null) {
-      const err = error as any;
+      const err = error as { status?: number; code?: number };
       if (
         err.status &&
         (err.status === 429 || err.status === 503 || err.status === 504)
@@ -227,7 +227,7 @@ export class RetryService {
    * @param fn The async function to wrap with retry logic
    * @returns A new function with the same signature but with retry capabilities
    */
-  public wrap<T extends any[], R>(
+  public wrap<T extends unknown[], R>(
     fn: (...args: T) => Promise<R>
   ): (...args: T) => Promise<R> {
     return async (...args: T): Promise<R> => {

@@ -1,4 +1,4 @@
-import fetch from "node-fetch";
+import fetch, { Response as FetchResponse } from "node-fetch";
 import EventSource from "eventsource";
 
 export interface MCPTestClientOptions {
@@ -6,18 +6,43 @@ export interface MCPTestClientOptions {
   timeout?: number;
 }
 
+// Basic JSON-RPC 2.0 response union type used by this test client
+type JsonRpcSuccess = {
+  jsonrpc: "2.0";
+  id: number | string | null;
+  result: unknown;
+  error?: never;
+};
+
+type JsonRpcError = {
+  jsonrpc: "2.0";
+  id: number | string | null;
+  error: { message: string; [key: string]: unknown };
+  result?: never;
+};
+
+type JsonRpcResponse = JsonRpcSuccess | JsonRpcError;
+
 export class MCPTestClient {
-  private sessionId?: string;
+  public sessionId?: string;
   private url: string;
   private timeout: number;
   private eventSource?: EventSource;
 
-  constructor(options: MCPTestClientOptions) {
-    this.url = options.url;
-    this.timeout = options.timeout || 30000;
+  constructor(optionsOrUrl: MCPTestClientOptions | string) {
+    if (typeof optionsOrUrl === "string") {
+      this.url = optionsOrUrl;
+      this.timeout = 30000;
+    } else {
+      this.url = optionsOrUrl.url;
+      this.timeout = optionsOrUrl.timeout || 30000;
+    }
   }
 
-  async initialize(): Promise<any> {
+  async initialize(): Promise<{
+    protocolVersion: string;
+    capabilities: unknown;
+  }> {
     const response = await fetch(this.url, {
       method: "POST",
       headers: {
@@ -44,14 +69,17 @@ export class MCPTestClient {
     this.sessionId = response.headers.get("Mcp-Session-Id") || undefined;
     const result = await this.parseResponse(response);
 
-    if (result.error) {
+    if ("error" in result && result.error) {
       throw new Error(`Initialize failed: ${result.error.message}`);
     }
 
-    return result.result;
+    return (result as JsonRpcSuccess).result as {
+      protocolVersion: string;
+      capabilities: unknown;
+    };
   }
 
-  async listTools(): Promise<any[]> {
+  async listTools(): Promise<{ tools: unknown[] }> {
     if (!this.sessionId) {
       throw new Error("Not initialized - call initialize() first");
     }
@@ -73,14 +101,20 @@ export class MCPTestClient {
 
     const result = await this.parseResponse(response);
 
-    if (result.error) {
+    if ("error" in result && result.error) {
       throw new Error(`List tools failed: ${result.error.message}`);
     }
 
-    return result.result.tools;
+    return (result as JsonRpcSuccess).result as { tools: unknown[] };
   }
 
-  async callTool(name: string, args: any): Promise<any> {
+  async callTool(
+    name: string,
+    args: Record<string, unknown>
+  ): Promise<{
+    content?: Array<Record<string, unknown>>;
+    [key: string]: unknown;
+  }> {
     if (!this.sessionId) {
       throw new Error("Not initialized - call initialize() first");
     }
@@ -105,14 +139,20 @@ export class MCPTestClient {
 
     const result = await this.parseResponse(response);
 
-    if (result.error) {
+    if ("error" in result && result.error) {
       throw new Error(`Tool call failed: ${result.error.message}`);
     }
 
-    return result.result;
+    return (result as JsonRpcSuccess).result as {
+      content?: Array<Record<string, unknown>>;
+      [key: string]: unknown;
+    };
   }
 
-  async streamTool(name: string, args: any): Promise<AsyncIterable<any>> {
+  async streamTool(
+    name: string,
+    args: Record<string, unknown>
+  ): Promise<AsyncIterable<unknown>> {
     if (!this.sessionId) {
       throw new Error("Not initialized - call initialize() first");
     }
@@ -144,7 +184,7 @@ export class MCPTestClient {
     const eventSource = this.eventSource;
     return {
       async *[Symbol.asyncIterator]() {
-        const chunks: any[] = [];
+        const chunks: unknown[] = [];
         let done = false;
 
         eventSource.onmessage = (event) => {
@@ -195,7 +235,14 @@ export class MCPTestClient {
     this.sessionId = undefined;
   }
 
-  private async parseResponse(response: Response): Promise<any> {
+  // Alias for backward compatibility with existing tests
+  async close(): Promise<void> {
+    await this.disconnect();
+  }
+
+  private async parseResponse(
+    response: FetchResponse
+  ): Promise<JsonRpcResponse> {
     const contentType = response.headers.get("content-type") || "";
 
     if (contentType.includes("text/event-stream")) {
@@ -206,7 +253,7 @@ export class MCPTestClient {
       for (const line of lines) {
         if (line.startsWith("data: ")) {
           try {
-            return JSON.parse(line.substring(6));
+            return JSON.parse(line.substring(6)) as JsonRpcResponse;
           } catch (e) {
             // Continue to next line
           }
@@ -216,7 +263,7 @@ export class MCPTestClient {
       throw new Error("No valid JSON data in SSE response");
     } else {
       // Standard JSON response
-      return response.json();
+      return (await response.json()) as JsonRpcResponse;
     }
   }
 }

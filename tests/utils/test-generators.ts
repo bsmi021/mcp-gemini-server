@@ -262,7 +262,13 @@ export async function generateTestFile(
 export function generateTestContentArray(
   messageCount: number = 3,
   includeImages: boolean = false
-): any[] {
+): Array<{
+  role: string;
+  parts: Array<{
+    text?: string;
+    inline_data?: { mime_type: string; data: string };
+  }>;
+}> {
   const contents = [];
 
   for (let i = 0; i < messageCount; i++) {
@@ -279,8 +285,8 @@ export function generateTestContentArray(
     // Optionally add an image part for user messages
     if (includeImages && isUserMessage && Math.random() > 0.5) {
       parts.push({
-        inlineData: {
-          mimeType: "image/jpeg",
+        inline_data: {
+          mime_type: "image/jpeg",
           data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
         },
       });
@@ -304,8 +310,8 @@ export function generateTestContentArray(
  */
 export function generateFunctionCall(
   functionName: string,
-  args: Record<string, any> = {}
-): any {
+  args: Record<string, unknown> = {}
+): { name: string; args: Record<string, unknown> } {
   return {
     name: functionName,
     args,
@@ -318,7 +324,11 @@ export function generateFunctionCall(
  * @param objectCount - Number of objects to generate
  * @returns Array of objects with bounding boxes
  */
-export function generateBoundingBoxes(objectCount: number = 3): any[] {
+export function generateBoundingBoxes(objectCount: number = 3): Array<{
+  label: string;
+  boundingBox: { xMin: number; yMin: number; xMax: number; yMax: number };
+  confidence: number;
+}> {
   const commonObjects = [
     "dog",
     "cat",

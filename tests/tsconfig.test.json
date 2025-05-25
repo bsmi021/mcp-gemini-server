@@ -2,12 +2,14 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
-    "types": ["node"],
-    "allowImportingTsExtensions": true
+    "types": ["node", "vitest/globals"],
+    "allowImportingTsExtensions": true,
+    "rootDir": ".."
   },
   "include": [
     "../src/**/*",
-    "./**/*"
+    "./**/*",
+    "../node_modules/vitest/globals.d.ts"
   ],
   "exclude": [
     "../node_modules",

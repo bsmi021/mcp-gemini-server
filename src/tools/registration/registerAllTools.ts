@@ -8,51 +8,34 @@ import { ToolRegistry } from "./ToolRegistry.js";
 import {
   adaptServerOnlyTool,
   adaptGeminiServiceTool,
-  adaptMcpClientServiceTool,
-  adaptDirectTool,
+  adaptNewToolObject,
+  adaptNewGeminiServiceToolObject,
+  adaptNewMcpClientServiceToolObject,
 } from "./ToolAdapter.js";
 import { logger } from "../../utils/logger.js";
 import { GeminiService } from "../../services/GeminiService.js";
 import { McpClientService } from "../../services/mcp/McpClientService.js";
 
 // Import tool registration functions
-import { exampleTool } from "../exampleTool.js";
-import { geminiGenerateContentTool } from "../geminiGenerateContentTool.js";
-import { geminiGenerateContentStreamTool } from "../geminiGenerateContentStreamTool.js";
-import { geminiFunctionCallTool } from "../geminiFunctionCallTool.js";
-import { geminiStartChatTool } from "../geminiStartChatTool.js";
-import { geminiSendMessageTool } from "../geminiSendMessageTool.js";
-import { geminiSendFunctionResultTool } from "../geminiSendFunctionResultTool.js";
+import { geminiGenerateContentConsolidatedTool } from "../geminiGenerateContentConsolidatedTool.js";
+import { geminiChatTool } from "../geminiChatTool.js";
 import { geminiRouteMessageTool } from "../geminiRouteMessageTool.js";
-// --- File Handling Tool Imports ---
-import { geminiUploadFileTool } from "../geminiUploadFileTool.js";
-import { geminiListFilesTool } from "../geminiListFilesTool.js";
-import { geminiGetFileTool } from "../geminiGetFileTool.js";
-import { geminiDeleteFileTool } from "../geminiDeleteFileTool.js";
-// --- Caching Tool Imports ---
-import { geminiCreateCacheTool } from "../geminiCreateCacheTool.js";
-import { geminiListCachesTool } from "../geminiListCachesTool.js";
-import { geminiGetCacheTool } from "../geminiGetCacheTool.js";
-import { geminiUpdateCacheTool } from "../geminiUpdateCacheTool.js";
-import { geminiDeleteCacheTool } from "../geminiDeleteCacheTool.js";
+// --- Remote Files Migration and Cache Tools ---
+import { geminiRemoteFilesTool } from "../geminiRemoteFilesTool.js";
+import { geminiCacheTool } from "../geminiCacheTool.js";
 // Image feature tools
 import { geminiGenerateImageTool } from "../geminiGenerateImageTool.js";
-import { geminiObjectDetectionTool } from "../geminiObjectDetectionTool.js";
-import { geminiContentUnderstandingTool } from "../geminiContentUnderstandingTool.js";
-// Audio transcription tool
-import { geminiAudioTranscriptionTool } from "../geminiAudioTranscriptionTool.js";
-// Git diff review tools
-import { geminiGitLocalDiffReviewTool } from "../geminiGitLocalDiffReviewTool.js";
-import { geminiGitLocalDiffStreamReviewTool } from "../geminiGitLocalDiffStreamReviewTool.js";
-import { geminiGitHubRepoReviewTool } from "../geminiGitHubRepoReviewTool.js";
-import { geminiGitHubPRReviewTool } from "../geminiGitHubPRReviewTool.js";
+import { geminiAnalyzeMediaTool } from "../geminiAnalyzeMediaTool.js";
+// Code review tools
+import {
+  geminiCodeReviewTool,
+  geminiCodeReviewStreamTool,
+} from "../geminiCodeReviewTool.js";
+import type { GeminiCodeReviewArgs } from "../geminiCodeReviewParams.js";
 // URL Context tools
 import { geminiUrlAnalysisTool } from "../geminiUrlAnalysisTool.js";
 // MCP tools
-import { mcpConnectToServerTool } from "../mcpConnectToServerTool.js";
-import { mcpDisconnectFromServerTool } from "../mcpDisconnectFromServerTool.js";
-import { mcpListServerToolsTool } from "../mcpListServerToolsTool.js";
-import { mcpCallServerTool } from "../mcpCallServerTool.js";
+import { mcpClientTool } from "../mcpClientTool.js";
 // File utils tool
 import { writeToFileTool } from "../writeToFileTool.js";
 
@@ -74,97 +57,41 @@ export function registerAllTools(server: McpServer): McpClientService {
   try {
     // Register all tools with appropriate adapters
 
-    // Example tool
-    registry.registerTool(adaptServerOnlyTool(exampleTool, "exampleTool"));
+    // Note: Example tool removed as per refactoring
 
     // Content generation tools
     registry.registerTool(
       adaptGeminiServiceTool(
-        geminiGenerateContentTool,
-        "geminiGenerateContentTool"
+        geminiGenerateContentConsolidatedTool,
+        "geminiGenerateContentConsolidatedTool"
       )
-    );
-    registry.registerTool(
-      adaptGeminiServiceTool(
-        geminiGenerateContentStreamTool,
-        "geminiGenerateContentStreamTool"
-      )
-    );
-    registry.registerTool(
-      adaptGeminiServiceTool(geminiFunctionCallTool, "geminiFunctionCallTool")
     );
 
     // Chat tools
     registry.registerTool(
-      adaptGeminiServiceTool(geminiStartChatTool, "geminiStartChatTool")
-    );
-    registry.registerTool(
-      adaptGeminiServiceTool(geminiSendMessageTool, "geminiSendMessageTool")
-    );
-    registry.registerTool(
-      adaptGeminiServiceTool(
-        geminiSendFunctionResultTool,
-        "geminiSendFunctionResultTool"
-      )
+      adaptGeminiServiceTool(geminiChatTool, "geminiChatTool")
     );
     registry.registerTool(
       adaptGeminiServiceTool(geminiRouteMessageTool, "geminiRouteMessageTool")
     );
 
-    // File handling tools
+    // File and cache management tools
     registry.registerTool(
-      adaptGeminiServiceTool(geminiUploadFileTool, "geminiUploadFileTool")
+      adaptGeminiServiceTool(geminiRemoteFilesTool, "geminiRemoteFilesTool")
     );
     registry.registerTool(
-      adaptGeminiServiceTool(geminiListFilesTool, "geminiListFilesTool")
-    );
-    registry.registerTool(
-      adaptGeminiServiceTool(geminiGetFileTool, "geminiGetFileTool")
-    );
-    registry.registerTool(
-      adaptGeminiServiceTool(geminiDeleteFileTool, "geminiDeleteFileTool")
-    );
-
-    // Caching tools
-    registry.registerTool(
-      adaptGeminiServiceTool(geminiCreateCacheTool, "geminiCreateCacheTool")
-    );
-    registry.registerTool(
-      adaptGeminiServiceTool(geminiListCachesTool, "geminiListCachesTool")
-    );
-    registry.registerTool(
-      adaptGeminiServiceTool(geminiGetCacheTool, "geminiGetCacheTool")
-    );
-    registry.registerTool(
-      adaptGeminiServiceTool(geminiUpdateCacheTool, "geminiUpdateCacheTool")
-    );
-    registry.registerTool(
-      adaptGeminiServiceTool(geminiDeleteCacheTool, "geminiDeleteCacheTool")
+      adaptGeminiServiceTool(geminiCacheTool, "geminiCacheTool")
     );
 
     // Image feature tools
     registry.registerTool(
-      adaptServerOnlyTool(geminiGenerateImageTool, "geminiGenerateImageTool")
+      adaptNewGeminiServiceToolObject(geminiGenerateImageTool)
     );
     registry.registerTool(
-      adaptServerOnlyTool(
-        geminiObjectDetectionTool,
-        "geminiObjectDetectionTool"
-      )
-    );
-    registry.registerTool(
-      adaptServerOnlyTool(
-        geminiContentUnderstandingTool,
-        "geminiContentUnderstandingTool"
-      )
-    );
-
-    // Audio transcription tool
-    registry.registerTool(
-      adaptServerOnlyTool(
-        geminiAudioTranscriptionTool,
-        "geminiAudioTranscriptionTool"
-      )
+      adaptNewToolObject({
+        ...geminiAnalyzeMediaTool,
+        execute: geminiAnalyzeMediaTool.execute, // No cast needed
+      })
     );
 
     // URL Context tools
@@ -172,68 +99,36 @@ export function registerAllTools(server: McpServer): McpClientService {
       adaptGeminiServiceTool(geminiUrlAnalysisTool, "geminiUrlAnalysisTool")
     );
 
-    // Git diff review tools - these use a different registration pattern
+    // Code review tools
     registry.registerTool(
-      adaptDirectTool(
-        "gemini_gitLocalDiffReview",
-        "Review local git diff using Gemini models",
-        geminiGitLocalDiffReviewTool as unknown as (
-          args: unknown
-        ) => Promise<unknown>
-      )
+      adaptNewGeminiServiceToolObject(geminiCodeReviewTool)
+    );
+    // Note: geminiCodeReviewStreamTool returns an AsyncGenerator, not a Promise
+    // We need to wrap it to collect all chunks into a single response
+    registry.registerTool(
+      adaptNewGeminiServiceToolObject({
+        ...geminiCodeReviewStreamTool,
+        execute: async (args: GeminiCodeReviewArgs, service: GeminiService) => {
+          const results = [];
+          const generator = await geminiCodeReviewStreamTool.execute(
+            args,
+            service
+          );
+          for await (const chunk of generator) {
+            results.push(chunk);
+          }
+          // Return the last chunk which should contain the complete result
+          return results[results.length - 1];
+        },
+      })
     );
 
+    // MCP client tool
     registry.registerTool(
-      adaptDirectTool(
-        "gemini_gitLocalDiffStreamReview",
-        "Stream review of local git diff using Gemini models",
-        geminiGitLocalDiffStreamReviewTool as unknown as (
-          args: unknown
-        ) => Promise<unknown>
-      )
-    );
-
-    registry.registerTool(
-      adaptDirectTool(
-        "gemini_githubRepoReview",
-        "Review GitHub repository using Gemini models",
-        geminiGitHubRepoReviewTool as unknown as (
-          args: unknown
-        ) => Promise<unknown>
-      )
-    );
-
-    registry.registerTool(
-      adaptDirectTool(
-        "gemini_githubPRReview",
-        "Review GitHub pull request using Gemini models",
-        geminiGitHubPRReviewTool as unknown as (
-          args: unknown
-        ) => Promise<unknown>
-      )
-    );
-
-    // MCP tools
-    registry.registerTool(
-      adaptMcpClientServiceTool(
-        mcpConnectToServerTool,
-        "mcpConnectToServerTool"
-      )
-    );
-    registry.registerTool(
-      adaptMcpClientServiceTool(
-        mcpDisconnectFromServerTool,
-        "mcpDisconnectFromServerTool"
-      )
-    );
-    registry.registerTool(
-      adaptMcpClientServiceTool(
-        mcpListServerToolsTool,
-        "mcpListServerToolsTool"
-      )
-    );
-    registry.registerTool(
-      adaptMcpClientServiceTool(mcpCallServerTool, "mcpCallServerTool")
+      adaptNewMcpClientServiceToolObject({
+        ...mcpClientTool,
+        execute: mcpClientTool.execute, // No cast needed
+      })
     );
 
     // File utility tools

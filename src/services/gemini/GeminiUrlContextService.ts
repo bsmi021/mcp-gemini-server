@@ -454,7 +454,7 @@ export class GeminiUrlContextService {
       let counter = 1;
       return content.replace(
         /<li[^>]*>(.*?)<\/li>/gi,
-        () => `${counter++}. $1\n`
+        (_: string, itemContent: string) => `${counter++}. ${itemContent}\n`
       );
     });
 

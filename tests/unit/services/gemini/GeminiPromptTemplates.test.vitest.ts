@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 import {
   processTemplate,
   getReviewTemplate,
@@ -45,7 +45,7 @@ describe("GeminiPromptTemplates", () => {
     it("should handle non-string values", () => {
       const template = "The answer is {{answer}}.";
       const context = {
-        answer: 42,
+        answer: "42", // Convert number to string to match function signature
         diffContent: "sample diff content", // Required by function signature
       };
 

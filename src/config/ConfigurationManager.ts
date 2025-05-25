@@ -82,7 +82,7 @@ export class ConfigurationManager {
         host: "localhost",
         port: 8080,
         connectionToken: "", // Must be set via env
-        clientId: "gemini-sdk-client-default", // Must be set via env
+        clientId: "gemini-sdk-client",
         logLevel: "info",
         transport: "stdio",
       },
@@ -144,13 +144,26 @@ export class ConfigurationManager {
       return;
     }
 
-    const requiredVars = [
-      "GOOGLE_GEMINI_API_KEY",
-      "MCP_SERVER_HOST",
-      "MCP_SERVER_PORT",
-      "MCP_CONNECTION_TOKEN",
-      "MCP_CLIENT_ID",
-    ];
+    // Always require Gemini API key
+    const requiredVars = ["GOOGLE_GEMINI_API_KEY"];
+
+    // Check transport type to determine if MCP server variables are required
+    const transportType =
+      process.env.MCP_TRANSPORT || process.env.MCP_TRANSPORT_TYPE || "stdio";
+
+    // Only require MCP server variables for HTTP/SSE transport modes
+    if (
+      transportType === "http" ||
+      transportType === "sse" ||
+      transportType === "streamable"
+    ) {
+      requiredVars.push(
+        "MCP_SERVER_HOST",
+        "MCP_SERVER_PORT",
+        "MCP_CONNECTION_TOKEN"
+      );
+    }
+
     const missingVars = requiredVars.filter((varName) => !process.env[varName]);
 
     if (missingVars.length > 0) {
@@ -224,14 +237,6 @@ export class ConfigurationManager {
   }
 
   /**
-   * Returns the secure file base path for file operations
-   * @returns The configured safe file base directory or undefined if not set
-   */
-  public getSecureFileBasePath(): string | undefined {
-    return process.env.GEMINI_SAFE_FILE_BASE_DIR;
-  }
-
-  /**
    * Returns the GitHub API token for GitHub API requests
    * @returns The configured GitHub API token or undefined if not set
    */
@@ -293,13 +298,6 @@ export class ConfigurationManager {
     if (process.env.EXAMPLE_ENABLE_LOGS) {
       this.config.exampleService.enableDetailedLogs =
         process.env.EXAMPLE_ENABLE_LOGS.toLowerCase() === "true";
-    }
-
-    // Load safe file path base directory if provided
-    if (process.env.GEMINI_SAFE_FILE_BASE_DIR) {
-      logger.info(
-        `Safe file base directory configured: ${process.env.GEMINI_SAFE_FILE_BASE_DIR}`
-      );
     }
 
     // Load GitHub API token if provided
@@ -754,23 +752,6 @@ export class ConfigurationManager {
         supportsCaching: true,
       },
       "gemini-1.5-flash": {
-        textGeneration: true,
-        imageInput: true,
-        videoInput: true,
-        audioInput: true,
-        imageGeneration: false,
-        videoGeneration: false,
-        codeExecution: "basic",
-        complexReasoning: "basic",
-        costTier: "low",
-        speedTier: "fast",
-        maxTokens: 8192,
-        contextWindow: 1000000,
-        supportsFunctionCalling: true,
-        supportsSystemInstructions: true,
-        supportsCaching: true,
-      },
-      "gemini-1.5-flash-latest": {
         textGeneration: true,
         imageInput: true,
         videoInput: true,

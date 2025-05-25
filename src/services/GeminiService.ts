@@ -1,10 +1,8 @@
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import type { SafetySetting as GoogleSafetySetting } from "@google/genai";
 import { ConfigurationManager } from "../config/ConfigurationManager.js";
 import { ModelSelectionService } from "./ModelSelectionService.js";
 import { logger } from "../utils/logger.js";
 import {
-  FileMetadata,
   CachedContentMetadata,
   ImageGenerationResult,
   ModelSelectionCriteria,
@@ -23,18 +21,15 @@ import {
 import { GitHubApiService } from "./gemini/GitHubApiService.js";
 
 // Import specialized services
-import { GeminiFileService } from "./gemini/GeminiFileService.js";
 import { GeminiChatService } from "./gemini/GeminiChatService.js";
 import { GeminiContentService } from "./gemini/GeminiContentService.js";
 import { GeminiCacheService } from "./gemini/GeminiCacheService.js";
-import { FileSecurityService } from "../utils/FileSecurityService.js";
 import {
   Content,
   Tool,
   ToolConfig,
   GenerationConfig,
   SafetySetting,
-  FileId,
   CacheId,
   FunctionCall,
   ImagePart,
@@ -50,11 +45,9 @@ export class GeminiService {
   private modelSelector: ModelSelectionService;
   private configManager: ConfigurationManager;
 
-  private fileService: GeminiFileService;
   private chatService: GeminiChatService;
   private contentService: GeminiContentService;
   private cacheService: GeminiCacheService;
-  private fileSecurityService: FileSecurityService;
   private gitDiffService: GeminiGitDiffService;
   private gitHubApiService: GitHubApiService;
 
@@ -74,32 +67,13 @@ export class GeminiService {
     this.genAI = new GoogleGenAI({ apiKey: config.apiKey });
     this.defaultModelName = config.defaultModel;
 
-    // Initialize file security service first as it's used by other services
-    const secureBasePath = this.configManager.getSecureFileBasePath();
-    if (secureBasePath) {
-      this.fileSecurityService = new FileSecurityService(
-        [secureBasePath],
-        secureBasePath
-      );
-      logger.info(
-        `GeminiService initialized with secure file base path: ${secureBasePath}`
-      );
-    } else {
-      this.fileSecurityService = new FileSecurityService();
-      logger.warn(
-        "GeminiService initialized without a secure file base path. File operations will require explicit path validation."
-      );
-    }
+    // File security service is no longer needed since file operations were removed
+    // Audio transcription uses inline base64 data processing only
 
     // Initialize specialized services
-    this.fileService = new GeminiFileService(
-      this.genAI,
-      this.fileSecurityService
-    );
     this.contentService = new GeminiContentService(
       this.genAI,
       this.defaultModelName,
-      this.fileSecurityService,
       config.defaultThinkingBudget
     );
     this.chatService = new GeminiChatService(this.genAI, this.defaultModelName);
@@ -124,91 +98,6 @@ export class GeminiService {
 
     const githubApiToken = this.configManager.getGitHubApiToken();
     this.gitHubApiService = new GitHubApiService(githubApiToken);
-  }
-
-  /**
-   * Uploads a file to be used with the Gemini API.
-   * The file path is validated for security before reading.
-   *
-   * @param filePath The validated absolute path to the file
-   * @param options Optional metadata like displayName and mimeType
-   * @returns Promise resolving to file metadata including the name and URI
-   */
-  public async uploadFile(
-    filePath: string,
-    options?: { displayName?: string; mimeType?: string }
-  ): Promise<FileMetadata> {
-    return this.fileService.uploadFile(filePath, options);
-  }
-
-  /**
-   * Lists files that have been uploaded to the Gemini API.
-   *
-   * @param pageSize Optional maximum number of files to return
-   * @param pageToken Optional token for pagination
-   * @returns Promise resolving to an object with files array and optional nextPageToken
-   */
-  public async listFiles(
-    pageSize?: number,
-    pageToken?: string
-  ): Promise<{ files: FileMetadata[]; nextPageToken?: string }> {
-    return this.fileService.listFiles(pageSize, pageToken);
-  }
-
-  /**
-   * Gets a specific file's metadata from the Gemini API.
-   *
-   * @param fileId The ID of the file to retrieve (format: "files/{file_id}")
-   * @returns Promise resolving to the file metadata
-   */
-  public async getFile(fileId: FileId): Promise<FileMetadata> {
-    return this.fileService.getFile(fileId);
-  }
-
-  /**
-   * Deletes a file from the Gemini API.
-   *
-   * @param fileId The ID of the file to delete (format: "files/{file_id}")
-   * @returns Promise resolving to an object with success flag
-   */
-  public async deleteFile(fileId: FileId): Promise<{ success: boolean }> {
-    return this.fileService.deleteFile(fileId);
-  }
-
-  /**
-   * Validates a file path to ensure it's secure.
-   * This prevents path traversal attacks by ensuring paths:
-   * 1. Are absolute
-   * 2. Don't contain path traversal elements (../)
-   * 3. Are within a permitted base directory (optional)
-   *
-   * @param filePath The absolute file path to validate
-   * @param basePath Optional base path to restrict access to (if provided)
-   * @returns The validated file path
-   * @throws Error if the path is invalid or outside permitted boundaries
-   */
-  public validateFilePath(filePath: string, basePath?: string): string {
-    try {
-      return this.fileSecurityService.validateAndResolvePath(filePath, {
-        basePath: basePath,
-      });
-    } catch (error) {
-      // Convert ValidationError to Error for backward compatibility
-      if (error instanceof Error) {
-        throw new Error(error.message);
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Sets the secure base directory for file operations.
-   * All file operations will be restricted to this directory.
-   *
-   * @param basePath The absolute path to restrict file operations to
-   */
-  public setSecureBasePath(basePath: string): void {
-    this.fileSecurityService.setSecureBasePath(basePath);
   }
 
   /**
@@ -585,7 +474,7 @@ Format your response as a JSON object with this structure:
       // Generate the images
       const result = await model.generateImages({
         prompt: validatedParams.prompt,
-        safetySettings: effectiveSafetySettings as GoogleSafetySetting[],
+        safetySettings: effectiveSafetySettings as SafetySetting[] | undefined,
         ...generationConfig,
       });
 
@@ -704,13 +593,6 @@ Format your response as a JSON object with this structure:
         );
       }
     }
-  }
-
-  /**
-   * Gets the current secure base directory if set
-   */
-  public getSecureBasePath(): string | undefined {
-    return this.fileSecurityService.getSecureBasePath();
   }
 
   public async *generateContentStream(
@@ -1192,7 +1074,7 @@ export interface GenerateContentParams {
   safetySettings?: SafetySetting[];
   systemInstruction?: Content | string;
   cachedContentName?: string;
-  fileReferenceOrInlineData?: FileId | ImagePart | FileMetadata | string;
+  fileReferenceOrInlineData?: ImagePart | string;
   inlineDataMimeType?: string;
   urlContext?: {
     urls: string[];
@@ -1262,6 +1144,5 @@ export type {
   SafetySetting,
   Part,
   FunctionCall,
-  FileId,
   CacheId,
 } from "./gemini/GeminiTypes.js";

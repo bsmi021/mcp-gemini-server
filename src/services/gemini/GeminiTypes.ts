@@ -9,10 +9,7 @@ import type {
 } from "@google/genai";
 
 // Import ThinkingConfig and ExtendedGenerationConfig from our types
-import type {
-  ThinkingConfig,
-  ExtendedGenerationConfig,
-} from "../../types/googleGenAITypes.js";
+import type { ThinkingConfig } from "../../types/googleGenAITypes.js";
 
 // Re-export types from Google GenAI SDK and our custom types
 // Note: We're re-exporting the ExtendedGenerationConfig as GenerationConfig
@@ -39,7 +36,6 @@ declare module "@google/genai" {
 }
 
 // Type-safe resource IDs
-export type FileId = `files/${string}`;
 export type CacheId = `cachedContents/${string}`;
 
 /**

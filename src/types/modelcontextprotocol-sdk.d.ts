@@ -74,16 +74,16 @@ declare module "@modelcontextprotocol/sdk/server/mcp.js" {
     disconnect(): Promise<void>;
     registerTool(
       name: string,
-      handler: (args: any) => Promise<any>,
-      schema: any
+      handler: (args: unknown) => Promise<unknown>,
+      schema: unknown
     ): void;
 
     // Add the tool method that's being used in the codebase
     tool(
       name: string,
       description: string,
-      params: any,
-      handler: (args: any) => Promise<any>
+      params: unknown,
+      handler: (args: unknown) => Promise<unknown>
     ): void;
   }
 }

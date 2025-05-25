@@ -6,7 +6,6 @@
  */
 
 import assert from "node:assert/strict";
-import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { isMcpError } from "./error-helpers.js";
 
 /**

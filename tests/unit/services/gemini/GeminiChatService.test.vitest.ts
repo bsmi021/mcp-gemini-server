@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, expect, vi } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 import { GeminiChatService } from "../../../../src/services/gemini/GeminiChatService.js";
 import {
   GeminiApiError,

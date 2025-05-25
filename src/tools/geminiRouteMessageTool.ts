@@ -1,5 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { McpError, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import {
   GEMINI_ROUTE_MESSAGE_TOOL_NAME,
   GEMINI_ROUTE_MESSAGE_TOOL_DESCRIPTION,
@@ -7,17 +7,11 @@ import {
   GeminiRouteMessageArgs, // Import the type helper
 } from "./geminiRouteMessageParams.js";
 import { GeminiService } from "../services/index.js";
-import { GeminiServiceConfig } from "../types/index.js";
 import { logger } from "../utils/index.js";
-import { GeminiApiError, mapAnyErrorToMcpError } from "../utils/errors.js";
+import { mapAnyErrorToMcpError } from "../utils/errors.js";
 // Import SDK types used in parameters/response handling
 import { BlockedReason, FinishReason } from "@google/genai"; // Import enums as values
-import type {
-  GenerationConfig,
-  SafetySetting,
-  GenerateContentResponse,
-  Content,
-} from "@google/genai";
+import type { GenerationConfig, SafetySetting } from "@google/genai";
 
 /**
  * Registers the gemini_routeMessage tool with the MCP server.
@@ -34,11 +28,10 @@ export const geminiRouteMessageTool = (
    * @param args - The arguments object matching GEMINI_ROUTE_MESSAGE_PARAMS.
    * @returns The result containing the model's response and the chosen model name.
    */
-  const processRequest = async (
-    args: GeminiRouteMessageArgs
-  ): Promise<CallToolResult> => {
+  const processRequest = async (args: unknown): Promise<CallToolResult> => {
+    const typedArgs = args as GeminiRouteMessageArgs;
     logger.debug(
-      `Received ${GEMINI_ROUTE_MESSAGE_TOOL_NAME} request with message: "${args.message.substring(0, 50)}${args.message.length > 50 ? "..." : ""}"`
+      `Received ${GEMINI_ROUTE_MESSAGE_TOOL_NAME} request with message: "${typedArgs.message.substring(0, 50)}${typedArgs.message.length > 50 ? "..." : ""}"`
     );
     try {
       // Destructure all arguments
@@ -50,7 +43,7 @@ export const geminiRouteMessageTool = (
         generationConfig,
         safetySettings,
         systemInstruction,
-      } = args;
+      } = typedArgs;
 
       // Call the service to route the message
       const { response, chosenModel } = await serviceInstance.routeMessage({

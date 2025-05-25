@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 import { ModelSelectionService } from "../../../src/services/ModelSelectionService.js";
 import {
   ModelConfiguration,

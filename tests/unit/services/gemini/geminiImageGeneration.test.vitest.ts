@@ -1,11 +1,10 @@
-import { describe, it, beforeEach, afterEach, expect, vi } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 import { GeminiService } from "../../../../src/services/GeminiService.js";
 import {
   GeminiApiError,
   GeminiModelError,
   GeminiErrorMessages,
 } from "../../../../src/utils/geminiErrors.js";
-import { ImageGenerationResult } from "../../../../src/types/index.js";
 import * as dotenv from "dotenv";
 import { resolve } from "path";
 
@@ -15,19 +14,11 @@ dotenv.config({
 });
 
 describe("GeminiService - Image Generation", () => {
-  // Define types for our mock functions
-  type GenerateImagesFunc = (params: any) => Promise<{
-    images: Array<{ data: string; mimeType: string }>;
-    promptSafetyMetadata?: { blocked: boolean };
-  }>;
-
-  type GetModelFunc = (params: { model: string }) => {
-    generateImages: GenerateImagesFunc;
-  };
+  // Mock function types are inferred from usage
 
   // Create properly typed mocks using vitest
-  const mockGenerateImages = vi.fn<any, any>();
-  const mockGetGenerativeModel = vi.fn<any, any>();
+  const mockGenerateImages = vi.fn();
+  const mockGetGenerativeModel = vi.fn();
 
   // Mock response data
   const mockImageResponse = {
@@ -53,11 +44,11 @@ describe("GeminiService - Image Generation", () => {
     vi.resetAllMocks();
 
     // Configure the mock behavior with properly typed implementations
-    mockGenerateImages.mockImplementation((params) => {
+    mockGenerateImages.mockImplementation(() => {
       return Promise.resolve(mockImageResponse);
     });
 
-    mockGetGenerativeModel.mockImplementation((params) => {
+    mockGetGenerativeModel.mockImplementation(() => {
       return {
         generateImages: mockGenerateImages,
       };
@@ -125,7 +116,7 @@ describe("GeminiService - Image Generation", () => {
 
         // Format the result according to our interface
         return {
-          images: result.images.map((img) => ({
+          images: result.images.map((img: any) => ({
             base64Data: img.data || "",
             mimeType: img.mimeType || "image/png",
             width,
@@ -150,7 +141,11 @@ describe("GeminiService - Image Generation", () => {
     };
 
     // Make sure to store the original to restore it in afterEach
-    (GeminiService as any)._originalGenerateImage = originalGenerateImage;
+    (
+      GeminiService as unknown as {
+        _originalGenerateImage: typeof originalGenerateImage;
+      }
+    )._originalGenerateImage = originalGenerateImage;
   });
 
   // Restore original environment variable and method after tests
@@ -159,11 +154,17 @@ describe("GeminiService - Image Generation", () => {
     process.env.GOOGLE_GEMINI_API_KEY = origEnv;
 
     // Restore original method
-    if ((GeminiService as any)._originalGenerateImage) {
+    if (
+      (GeminiService as unknown as { _originalGenerateImage?: unknown })
+        ._originalGenerateImage
+    ) {
       GeminiService.prototype.generateImage = (
-        GeminiService as any
+        GeminiService as unknown as {
+          _originalGenerateImage: typeof GeminiService.prototype.generateImage;
+        }
       )._originalGenerateImage;
-      delete (GeminiService as any)._originalGenerateImage;
+      delete (GeminiService as unknown as { _originalGenerateImage?: unknown })
+        ._originalGenerateImage;
     }
   });
 
@@ -204,16 +205,16 @@ describe("GeminiService - Image Generation", () => {
     // Arrange
     const service = new GeminiService();
     const prompt = "A futuristic cityscape";
-    const modelName = "gemini-2.0-flash-exp";
+    const modelName = "gemini-2.0-flash-preview-image-generation";
     const resolution = "512x512";
     const numberOfImages = 2;
-    // Using type assertion to match the type expected by the service
+    // Using proper SafetySetting types
     const safetySettings = [
       {
-        category: "HARM_CATEGORY_HARASSMENT",
-        threshold: "BLOCK_MEDIUM_AND_ABOVE",
+        category: "HARM_CATEGORY_HARASSMENT" as any,
+        threshold: "BLOCK_MEDIUM_AND_ABOVE" as any,
       },
-    ] as any;
+    ];
     const negativePrompt = "cars, traffic";
 
     // Act
@@ -229,7 +230,7 @@ describe("GeminiService - Image Generation", () => {
     // Assert
     expect(mockGetGenerativeModel).toHaveBeenCalledTimes(1);
     expect(mockGetGenerativeModel).toHaveBeenCalledWith({
-      model: "gemini-2.0-flash-exp",
+      model: "gemini-2.0-flash-preview-image-generation",
     });
 
     expect(mockGenerateImages).toHaveBeenCalledTimes(1);
@@ -274,7 +275,7 @@ describe("GeminiService - Image Generation", () => {
     const prompt = "Empty result test";
 
     // Configure mock to return empty images array with proper typing
-    mockGenerateImages.mockImplementation((params) => {
+    mockGenerateImages.mockImplementation(() => {
       return Promise.resolve({ images: [] });
     });
 
