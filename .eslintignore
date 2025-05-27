@@ -1,0 +1,33 @@
+# Compiled output
+dist/
+build/
+
+# Node modules
+node_modules/
+
+# Generated files
+*.generated.*
+*.d.ts.map
+
+# Coverage output
+coverage/
+
+# Other build artifacts
+.next/
+.nuxt/
+
+# Documentation and config files
+*.md
+*.txt
+tsconfig*.json
+package-lock.json
+*.yaml
+*.yml
+.DS_Store
+LICENSE
+
+# Environment and config
+.env*
+.prettierrc*
+.husky/
+.git/ 

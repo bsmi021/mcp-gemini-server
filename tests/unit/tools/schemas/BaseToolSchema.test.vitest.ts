@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 import { z } from "zod";
 import { createToolSchema } from "../../../../src/tools/schemas/BaseToolSchema.js";
 

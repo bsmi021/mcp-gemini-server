@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 import { GitHubUrlParser } from "../../../../src/services/gemini/GitHubUrlParser.js";
 
 describe("GitHubUrlParser", () => {

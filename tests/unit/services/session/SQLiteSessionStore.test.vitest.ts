@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 import { SQLiteSessionStore } from "../../../../src/services/session/SQLiteSessionStore.js";
 import { SessionState } from "../../../../src/services/SessionService.js";
 import { promises as fs } from "fs";
@@ -229,7 +229,15 @@ describe("SQLiteSessionStore", () => {
 
       // Manually corrupt the data in the database
       // This is a bit hacky but tests error handling
-      const db = (store as any).db;
+      const db = (
+        store as unknown as {
+          db: {
+            prepare: (sql: string) => {
+              run: (param1: string, param2: string) => void;
+            };
+          };
+        }
+      ).db;
       db.prepare("UPDATE sessions SET data = ? WHERE id = ?").run(
         "invalid json",
         session.id

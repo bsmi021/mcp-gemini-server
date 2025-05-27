@@ -29,7 +29,7 @@ const analysisTypeSchema = z
 
 // Extraction schema for structured data extraction
 const extractionSchemaSchema = z
-  .any()
+  .record(z.unknown())
   .optional()
   .describe(
     "JSON schema or structure definition for extracting specific information from content"
@@ -111,10 +111,6 @@ export const GEMINI_URL_ANALYSIS_PARAMS = {
     .describe("Specific Gemini model to use (auto-selected if not specified)"),
 };
 
-type GeminiUrlAnalysisArgs = z.infer<
-  z.ZodObject<typeof GEMINI_URL_ANALYSIS_PARAMS>
->;
-
 /**
  * Registers the gemini_url_analysis tool with the MCP server.
  * Provides specialized URL analysis capabilities with intelligent content processing.
@@ -123,11 +119,14 @@ export const geminiUrlAnalysisTool = (
   server: McpServer,
   serviceInstance: GeminiService
 ): void => {
-  const processRequest = async (args: GeminiUrlAnalysisArgs) => {
+  const processRequest = async (args: unknown) => {
+    // Parse and validate the arguments
+    const parsedArgs = z.object(GEMINI_URL_ANALYSIS_PARAMS).parse(args);
+
     logger.debug(`Received ${GEMINI_URL_ANALYSIS_TOOL_NAME} request:`, {
-      urls: args.urls,
-      analysisType: args.analysisType,
-      urlCount: args.urls.length,
+      urls: parsedArgs.urls,
+      analysisType: parsedArgs.analysisType,
+      urlCount: parsedArgs.urls.length,
     });
 
     try {
@@ -142,7 +141,7 @@ export const geminiUrlAnalysisTool = (
         includeMetadata,
         fetchOptions,
         modelName,
-      } = args;
+      } = parsedArgs;
 
       // Build the analysis prompt based on the analysis type
       const prompt = buildAnalysisPrompt({
@@ -178,9 +177,15 @@ export const geminiUrlAnalysisTool = (
         prompt,
         modelName,
         urlContext,
-        taskType,
+        taskType: taskType as
+          | "text-generation"
+          | "image-generation"
+          | "video-generation"
+          | "code-review"
+          | "multimodal"
+          | "reasoning",
         preferQuality: true, // Prefer quality for analysis tasks
-        complexityHint: urlCount > 5 ? "high" : "medium",
+        complexityHint: urlCount > 5 ? "complex" : "medium",
         urlCount,
         estimatedUrlContentSize,
         systemInstruction: getSystemInstructionForAnalysis(
@@ -226,7 +231,7 @@ export const geminiUrlAnalysisTool = (
 function buildAnalysisPrompt(params: {
   analysisType: string;
   query?: string;
-  extractionSchema?: any;
+  extractionSchema?: Record<string, unknown>;
   questions?: string[];
   compareBy?: string[];
   outputFormat?: string;

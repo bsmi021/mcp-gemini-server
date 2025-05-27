@@ -63,7 +63,7 @@ export function createMockResponse<ResBody = any>(
 ): Response<ResBody> {
   // Create response behaviors
   let statusCode = 200;
-  let responseData: any = {};
+  let responseData: unknown = {};
   let responseHeaders: Record<string, string> = {};
   let endCalled = false;
 
@@ -82,15 +82,15 @@ export function createMockResponse<ResBody = any>(
       statusCode = code;
       return this as Response<ResBody>;
     },
-    json: function (data: any): Response<ResBody> {
+    json: function (data: unknown): Response<ResBody> {
       responseData = data;
       return this as Response<ResBody>;
     },
-    send: function (data: any): Response<ResBody> {
+    send: function (data: unknown): Response<ResBody> {
       responseData = data;
       return this as Response<ResBody>;
     },
-    end: function (data?: any): Response<ResBody> {
+    end: function (data?: unknown): Response<ResBody> {
       if (data) responseData = data;
       endCalled = true;
       return this as Response<ResBody>;

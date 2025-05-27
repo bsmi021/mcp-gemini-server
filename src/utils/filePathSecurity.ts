@@ -3,11 +3,6 @@ import * as path from "path";
 import { logger } from "./logger.js";
 import { ValidationError } from "./errors.js";
 
-// Default safe base directory - using the project root as the default
-// In production, this should be configurable via environment variable
-const DEFAULT_SAFE_BASE_DIR =
-  process.env.GEMINI_SAFE_FILE_BASE_DIR || path.resolve(process.cwd());
-
 /**
  * Validates that a file path is secure and resolves it to an absolute path
  *

@@ -116,7 +116,7 @@ export function preCheckEnv(
  * @returns Boolean indicating if the test should be skipped
  */
 export function skipIfEnvMissing(
-  t: any,
+  t: { skip: (reason: string) => void },
   requiredVars: string[] = REQUIRED_ENV_VARS.BASIC
 ): boolean {
   const check = verifyEnvVars(requiredVars);

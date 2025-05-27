@@ -4,7 +4,7 @@
  */
 
 declare module "vitest" {
-  interface Mock<T = any> {
+  interface Mock {
     <This, Args extends any[] = any[], Return = any>(
       this: This,
       ...args: Args

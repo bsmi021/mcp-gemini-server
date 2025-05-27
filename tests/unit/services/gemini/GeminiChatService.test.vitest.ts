@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, expect, vi } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 import { GeminiChatService } from "../../../../src/services/gemini/GeminiChatService.js";
 import {
   GeminiApiError,
@@ -81,7 +81,6 @@ describe("GeminiChatService", () => {
       apiClient: {} as unknown,
       generateContentInternal: vi.fn(),
       generateContentStreamInternal: vi.fn(),
-      generateImagesInternal: vi.fn(),
     },
     // Add other required properties for GoogleGenAI
     apiClient: {} as unknown,

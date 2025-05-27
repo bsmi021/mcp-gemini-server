@@ -32,6 +32,42 @@ export type LegacyMcpClientServiceTool = (
 ) => void;
 
 /**
+ * New tool object format with execute function
+ */
+export interface NewToolObject<TArgs = unknown, TResult = unknown> {
+  name: string;
+  description: string;
+  inputSchema: unknown;
+  execute: (args: TArgs) => Promise<TResult>;
+}
+
+/**
+ * New tool object format that needs GeminiService
+ */
+export interface NewGeminiServiceToolObject<
+  TArgs = unknown,
+  TResult = unknown,
+> {
+  name: string;
+  description: string;
+  inputSchema: unknown;
+  execute: (args: TArgs, service: GeminiService) => Promise<TResult>;
+}
+
+/**
+ * New tool object format that needs McpClientService
+ */
+export interface NewMcpClientServiceToolObject<
+  TArgs = unknown,
+  TResult = unknown,
+> {
+  name: string;
+  description: string;
+  inputSchema: unknown;
+  execute: (args: TArgs, service: McpClientService) => Promise<TResult>;
+}
+
+/**
  * Adapts a legacy tool that only uses server to the new registration system
  * @param tool Legacy tool function
  * @param name Optional name for logging
@@ -99,6 +135,98 @@ export function adaptMcpClientServiceTool(
     } catch (error) {
       logger.error(
         `Failed to register McpClientService tool${name ? ` ${name}` : ""}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  };
+}
+
+/**
+ * Adapts a new tool object format to the registration system
+ * @param tool New tool object with execute method
+ */
+export function adaptNewToolObject<TArgs, TResult>(
+  tool: NewToolObject<TArgs, TResult>
+): ToolRegistrationFn {
+  return (server: McpServer, _services: ServiceContainer) => {
+    try {
+      // Wrap the execute function with proper type inference
+      const wrappedExecute = async (args: TArgs): Promise<TResult> => {
+        return tool.execute(args);
+      };
+      server.tool(
+        tool.name,
+        tool.description,
+        tool.inputSchema,
+        wrappedExecute as (args: unknown) => Promise<unknown>
+      );
+      logger.debug(`Registered new tool object: ${tool.name}`);
+    } catch (error) {
+      logger.error(
+        `Failed to register new tool object ${tool.name}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  };
+}
+
+/**
+ * Adapts a new tool object that needs GeminiService to the registration system
+ * @param tool New tool object with execute method that needs GeminiService
+ */
+export function adaptNewGeminiServiceToolObject<TArgs, TResult>(
+  tool: NewGeminiServiceToolObject<TArgs, TResult>
+): ToolRegistrationFn {
+  return (server: McpServer, services: ServiceContainer) => {
+    try {
+      // Wrap the execute function with proper type inference
+      const wrappedExecute = async (args: TArgs): Promise<TResult> => {
+        return tool.execute(args, services.geminiService);
+      };
+      server.tool(
+        tool.name,
+        tool.description,
+        tool.inputSchema,
+        wrappedExecute as (args: unknown) => Promise<unknown>
+      );
+      logger.debug(`Registered new Gemini service tool object: ${tool.name}`);
+    } catch (error) {
+      logger.error(
+        `Failed to register new Gemini service tool object ${tool.name}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  };
+}
+
+/**
+ * Adapts a new tool object that needs McpClientService to the registration system
+ * @param tool New tool object with execute method that needs McpClientService
+ */
+export function adaptNewMcpClientServiceToolObject<TArgs, TResult>(
+  tool: NewMcpClientServiceToolObject<TArgs, TResult>
+): ToolRegistrationFn {
+  return (server: McpServer, services: ServiceContainer) => {
+    try {
+      // Wrap the execute function with proper type inference
+      const wrappedExecute = async (args: TArgs): Promise<TResult> => {
+        return tool.execute(args, services.mcpClientService);
+      };
+      server.tool(
+        tool.name,
+        tool.description,
+        tool.inputSchema,
+        wrappedExecute as (args: unknown) => Promise<unknown>
+      );
+      logger.debug(
+        `Registered new MCP client service tool object: ${tool.name}`
+      );
+    } catch (error) {
+      logger.error(
+        `Failed to register new MCP client service tool object ${tool.name}: ${
           error instanceof Error ? error.message : String(error)
         }`
       );

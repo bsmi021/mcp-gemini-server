@@ -1,14 +1,16 @@
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { logger } from "../../utils/logger.js";
 import {
-  GeminiApiError,
-  GeminiContentFilterError,
   GeminiModelError,
   GeminiValidationError,
   mapGeminiError,
-  GeminiErrorMessages,
 } from "../../utils/geminiErrors.js";
-import { Content, GenerationConfig, SafetySetting } from "./GeminiTypes.js";
+import {
+  Content,
+  GenerationConfig,
+  SafetySetting,
+  Tool,
+} from "./GeminiTypes.js";
 import gitdiffParser from "gitdiff-parser";
 import micromatch from "micromatch";
 import {
@@ -16,6 +18,34 @@ import {
   processTemplate,
   getFocusInstructions,
 } from "./GeminiPromptTemplates.js";
+
+// Define interface for gitdiff-parser return type
+interface GitDiffParserFile {
+  oldPath: string;
+  newPath: string;
+  oldRevision: string;
+  newRevision: string;
+  hunks: Array<{
+    content: string;
+    oldStart: number;
+    newStart: number;
+    oldLines: number;
+    newLines: number;
+    changes: Array<{
+      content: string;
+      type: "insert" | "delete" | "normal";
+      lineNumber?: number;
+      oldLineNumber?: number;
+      newLineNumber?: number;
+    }>;
+  }>;
+  isBinary?: boolean;
+  oldEndingNewLine?: boolean;
+  newEndingNewLine?: boolean;
+  oldMode?: string;
+  newMode?: string;
+  similarity?: number;
+}
 
 // Define our interface matching the original GoogleGenAI interface
 interface GenerativeModel {
@@ -29,8 +59,31 @@ interface GenerativeModel {
       text(): string;
     }>;
   }>;
-  startChat(options?: any): any;
-  generateImages(params: any): Promise<any>;
+  startChat(options?: {
+    history?: Content[];
+    generationConfig?: GenerationConfig;
+    safetySettings?: SafetySetting[];
+    tools?: Tool[];
+    systemInstruction?: Content;
+    cachedContent?: string;
+  }): {
+    sendMessage(text: string): Promise<{ response: { text(): string } }>;
+    sendMessageStream(
+      text: string
+    ): Promise<{ stream: AsyncGenerator<{ text(): string }> }>;
+    getHistory(): Content[];
+  };
+  generateImages(params: {
+    prompt: string;
+    safetySettings?: SafetySetting[];
+    [key: string]: unknown;
+  }): Promise<{
+    images?: Array<{ data?: string; mimeType?: string }>;
+    promptSafetyMetadata?: {
+      blocked?: boolean;
+      safetyRatings?: Array<{ category: string; probability: string }>;
+    };
+  }>;
 }
 
 // Define interface for GoogleGenAI with getGenerativeModel method
@@ -164,11 +217,10 @@ export class GeminiGitDiffService {
       }
 
       // Parse using gitdiff-parser
-      // Using type assertion to handle the parse method
-      const parser = gitdiffParser as unknown as {
-        parse(diffStr: string): any[];
-      };
-      const parsedFiles = parser.parse(diffContent);
+      // The gitdiff-parser module doesn't export types properly, but we know its structure
+      const parsedFiles = (
+        gitdiffParser as { parse: (diffStr: string) => GitDiffParserFile[] }
+      ).parse(diffContent);
 
       // Extend with additional type information
       return parsedFiles.map((file) => {

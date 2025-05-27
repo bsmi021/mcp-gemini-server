@@ -1,6 +1,2 @@
-// This file sets up Vitest globals for TypeScript
-import { expect, vi } from "vitest";
-
-// Re-export Vitest globals
-global.expect = expect;
-global.vi = vi;
+// This file sets up Vitest environment for TypeScript
+// With globals: true in vitest.config.ts, expect and vi are automatically available

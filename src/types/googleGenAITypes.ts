@@ -6,8 +6,6 @@ import type {
   Content,
   Tool,
   ToolConfig,
-  FunctionCall,
-  FunctionDeclaration,
 } from "@google/genai";
 
 // Define ThinkingConfig interface for controlling model reasoning
@@ -142,12 +140,12 @@ export type {
   GenerateContentResponseChunk,
   PromptFeedback,
   Candidate,
-  LocalFunctionCall as FunctionCall, // Export our local interface as FunctionCall for backward compatibility
+  LocalFunctionCall as FunctionCall,
   ChatSession,
   GenerateContentResponse,
-  ThinkingConfig, // Export ThinkingConfig
-  GenerationConfig, // Export our extended GenerationConfig
-  ExtendedGenerationConfig, // Export the alias for our extended GenerationConfig
-  GoogleGenerationConfig, // Export the original Google GenerationConfig in case it's needed
+  ThinkingConfig,
+  GenerationConfig,
+  ExtendedGenerationConfig,
+  GoogleGenerationConfig,
 };
 export { FinishReason, BlockedReason };

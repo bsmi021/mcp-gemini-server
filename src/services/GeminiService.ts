@@ -1,21 +1,12 @@
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import type { SafetySetting as GoogleSafetySetting } from "@google/genai";
 import { ConfigurationManager } from "../config/ConfigurationManager.js";
 import { ModelSelectionService } from "./ModelSelectionService.js";
 import { logger } from "../utils/logger.js";
 import {
-  FileMetadata,
   CachedContentMetadata,
-  ImageGenerationResult,
   ModelSelectionCriteria,
+  ImageGenerationResult,
 } from "../types/index.js";
-import {
-  GeminiContentFilterError,
-  GeminiModelError,
-  GeminiValidationError,
-  mapGeminiError,
-  GeminiErrorMessages,
-} from "../utils/geminiErrors.js";
 import {
   GeminiGitDiffService,
   GitDiffReviewParams,
@@ -23,21 +14,17 @@ import {
 import { GitHubApiService } from "./gemini/GitHubApiService.js";
 
 // Import specialized services
-import { GeminiFileService } from "./gemini/GeminiFileService.js";
 import { GeminiChatService } from "./gemini/GeminiChatService.js";
 import { GeminiContentService } from "./gemini/GeminiContentService.js";
 import { GeminiCacheService } from "./gemini/GeminiCacheService.js";
-import { FileSecurityService } from "../utils/FileSecurityService.js";
 import {
   Content,
   Tool,
   ToolConfig,
   GenerationConfig,
   SafetySetting,
-  FileId,
   CacheId,
   FunctionCall,
-  ImagePart,
 } from "./gemini/GeminiTypes.js";
 
 /**
@@ -50,11 +37,9 @@ export class GeminiService {
   private modelSelector: ModelSelectionService;
   private configManager: ConfigurationManager;
 
-  private fileService: GeminiFileService;
   private chatService: GeminiChatService;
   private contentService: GeminiContentService;
   private cacheService: GeminiCacheService;
-  private fileSecurityService: FileSecurityService;
   private gitDiffService: GeminiGitDiffService;
   private gitHubApiService: GitHubApiService;
 
@@ -74,32 +59,12 @@ export class GeminiService {
     this.genAI = new GoogleGenAI({ apiKey: config.apiKey });
     this.defaultModelName = config.defaultModel;
 
-    // Initialize file security service first as it's used by other services
-    const secureBasePath = this.configManager.getSecureFileBasePath();
-    if (secureBasePath) {
-      this.fileSecurityService = new FileSecurityService(
-        [secureBasePath],
-        secureBasePath
-      );
-      logger.info(
-        `GeminiService initialized with secure file base path: ${secureBasePath}`
-      );
-    } else {
-      this.fileSecurityService = new FileSecurityService();
-      logger.warn(
-        "GeminiService initialized without a secure file base path. File operations will require explicit path validation."
-      );
-    }
+    // File security service is no longer needed since file operations were removed
 
     // Initialize specialized services
-    this.fileService = new GeminiFileService(
-      this.genAI,
-      this.fileSecurityService
-    );
     this.contentService = new GeminiContentService(
       this.genAI,
       this.defaultModelName,
-      this.fileSecurityService,
       config.defaultThinkingBudget
     );
     this.chatService = new GeminiChatService(this.genAI, this.defaultModelName);
@@ -124,593 +89,6 @@ export class GeminiService {
 
     const githubApiToken = this.configManager.getGitHubApiToken();
     this.gitHubApiService = new GitHubApiService(githubApiToken);
-  }
-
-  /**
-   * Uploads a file to be used with the Gemini API.
-   * The file path is validated for security before reading.
-   *
-   * @param filePath The validated absolute path to the file
-   * @param options Optional metadata like displayName and mimeType
-   * @returns Promise resolving to file metadata including the name and URI
-   */
-  public async uploadFile(
-    filePath: string,
-    options?: { displayName?: string; mimeType?: string }
-  ): Promise<FileMetadata> {
-    return this.fileService.uploadFile(filePath, options);
-  }
-
-  /**
-   * Lists files that have been uploaded to the Gemini API.
-   *
-   * @param pageSize Optional maximum number of files to return
-   * @param pageToken Optional token for pagination
-   * @returns Promise resolving to an object with files array and optional nextPageToken
-   */
-  public async listFiles(
-    pageSize?: number,
-    pageToken?: string
-  ): Promise<{ files: FileMetadata[]; nextPageToken?: string }> {
-    return this.fileService.listFiles(pageSize, pageToken);
-  }
-
-  /**
-   * Gets a specific file's metadata from the Gemini API.
-   *
-   * @param fileId The ID of the file to retrieve (format: "files/{file_id}")
-   * @returns Promise resolving to the file metadata
-   */
-  public async getFile(fileId: FileId): Promise<FileMetadata> {
-    return this.fileService.getFile(fileId);
-  }
-
-  /**
-   * Deletes a file from the Gemini API.
-   *
-   * @param fileId The ID of the file to delete (format: "files/{file_id}")
-   * @returns Promise resolving to an object with success flag
-   */
-  public async deleteFile(fileId: FileId): Promise<{ success: boolean }> {
-    return this.fileService.deleteFile(fileId);
-  }
-
-  /**
-   * Validates a file path to ensure it's secure.
-   * This prevents path traversal attacks by ensuring paths:
-   * 1. Are absolute
-   * 2. Don't contain path traversal elements (../)
-   * 3. Are within a permitted base directory (optional)
-   *
-   * @param filePath The absolute file path to validate
-   * @param basePath Optional base path to restrict access to (if provided)
-   * @returns The validated file path
-   * @throws Error if the path is invalid or outside permitted boundaries
-   */
-  public validateFilePath(filePath: string, basePath?: string): string {
-    try {
-      return this.fileSecurityService.validateAndResolvePath(filePath, {
-        basePath: basePath,
-      });
-    } catch (error) {
-      // Convert ValidationError to Error for backward compatibility
-      if (error instanceof Error) {
-        throw new Error(error.message);
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Sets the secure base directory for file operations.
-   * All file operations will be restricted to this directory.
-   *
-   * @param basePath The absolute path to restrict file operations to
-   */
-  public setSecureBasePath(basePath: string): void {
-    this.fileSecurityService.setSecureBasePath(basePath);
-  }
-
-  /**
-   * Analyze content of an image to extract information such as charts, diagrams, etc.
-   *
-   * @param imagePart The image part to analyze
-   * @param prompt Prompt guiding the analysis
-   * @param structuredOutput Whether to return structured JSON
-   * @param modelName Optional model name
-   * @param safetySettings Optional safety settings
-   * @returns Analysis results
-   */
-  public async analyzeContent(
-    imagePart: ImagePart,
-    prompt: string,
-    structuredOutput?: boolean,
-    modelName?: string,
-    safetySettings?: SafetySetting[]
-  ): Promise<{
-    analysis: {
-      text?: string;
-      data?: Record<string, unknown>;
-    };
-  }> {
-    logger.debug("GeminiService.analyzeContent called");
-
-    try {
-      // Prepare the prompt for analysis
-      const analysisPrompt = structuredOutput
-        ? `${prompt}\n\nPlease provide your analysis in a structured JSON format.`
-        : prompt;
-
-      // Use the existing generateContent method with the image
-      const result = await this.generateContent({
-        prompt: analysisPrompt,
-        modelName: modelName || this.defaultModelName || "gemini-1.5-flash",
-        fileReferenceOrInlineData: imagePart,
-        safetySettings: safetySettings,
-        generationConfig: structuredOutput
-          ? {
-              temperature: 0.1, // Lower temperature for more consistent structured output
-              topK: 40,
-              topP: 0.95,
-              maxOutputTokens: 2048,
-            }
-          : undefined,
-      });
-
-      // Parse the result if structured output was requested
-      if (structuredOutput) {
-        try {
-          // Try to extract JSON from the response
-          const jsonMatch = result.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-          const jsonText = jsonMatch ? jsonMatch[1] : result.trim();
-          const parsedData = JSON.parse(jsonText);
-
-          return {
-            analysis: {
-              data: parsedData,
-              text: result,
-            },
-          };
-        } catch (parseError) {
-          logger.debug(
-            "Failed to parse structured output, returning as text",
-            parseError
-          );
-          return {
-            analysis: {
-              text: result,
-            },
-          };
-        }
-      }
-
-      // Return plain text analysis
-      return {
-        analysis: {
-          text: result,
-        },
-      };
-    } catch (error: unknown) {
-      logger.error("Error in analyzeContent:", error);
-      throw mapGeminiError(error, "analyzeContent");
-    }
-  }
-
-  /**
-   * Detect objects in an image using Gemini's vision capabilities
-   *
-   * Note: Gemini 1.5 Pro supports bounding box detection when explicitly requested.
-   * To get bounding boxes, include a request in your prompt like:
-   * "Return bounding boxes as [ymin, xmin, ymax, xmax]"
-   *
-   * The model returns coordinates as values between 0-1 scaled to a 1000x1000 grid.
-   * You'll need to convert these to match your original image dimensions.
-   *
-   * @param imagePart The image part to analyze
-   * @param promptAddition Additional prompt to guide detection
-   * @param modelName Optional model name (use gemini-1.5-pro for bounding boxes)
-   * @param safetySettings Optional safety settings
-   * @returns Detection results with objects array and raw text
-   */
-  public async detectObjects(
-    imagePart: ImagePart,
-    promptAddition?: string,
-    modelName?: string,
-    safetySettings?: SafetySetting[]
-  ): Promise<{
-    objects: Array<{
-      label: string;
-      boundingBox?: {
-        yMin: number;
-        xMin: number;
-        yMax: number;
-        xMax: number;
-      };
-      confidence?: number;
-      description?: string;
-    }>;
-    rawText: string;
-  }> {
-    logger.debug("GeminiService.detectObjects called");
-
-    try {
-      // Construct a comprehensive prompt for object detection
-      const basePrompt = `Analyze this image and identify all objects present. For each object you detect, provide:
-1. A clear label/name for the object
-2. A brief description of the object
-3. Bounding box coordinates as [ymin, xmin, ymax, xmax] (values between 0-1)
-4. A confidence score between 0 and 1 if you can estimate it
-
-Please be thorough and identify both prominent objects and smaller details that are clearly visible.
-
-Format your response as a JSON object with this structure:
-{
-  "objects": [
-    {
-      "label": "object name",
-      "description": "brief description of the object",
-      "boundingBox": [ymin, xmin, ymax, xmax],
-      "confidence": 0.95
-    }
-  ],
-  "summary": "brief overall description of what you see in the image"
-}`;
-
-      const fullPrompt = promptAddition
-        ? `${basePrompt}\n\nAdditional instructions: ${promptAddition}`
-        : basePrompt;
-
-      // Use the existing generateContent method for consistency
-      const result = await this.generateContent({
-        prompt: fullPrompt,
-        modelName: modelName || this.defaultModelName || "gemini-1.5-flash",
-        fileReferenceOrInlineData: imagePart,
-        safetySettings: safetySettings,
-        generationConfig: {
-          temperature: 0.1, // Low temperature for more consistent object detection
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 2048,
-        },
-      });
-
-      logger.debug("Object detection analysis completed");
-
-      // Define interface for the expected JSON structure
-      interface ParsedObjectDetectionResult {
-        objects?: Array<{
-          label?: string;
-          description?: string;
-          boundingBox?: number[];
-          confidence?: number;
-        }>;
-        summary?: string;
-      }
-
-      // Try to parse JSON response
-      let parsedResult: ParsedObjectDetectionResult;
-      try {
-        // Extract JSON from the response (handle cases where response includes markdown code blocks)
-        const jsonMatch = result.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
-        const jsonText = jsonMatch ? jsonMatch[1] : result.trim();
-        parsedResult = JSON.parse(jsonText) as ParsedObjectDetectionResult;
-      } catch (parseError) {
-        // If JSON parsing fails, create a structured response from the text
-        logger.debug(
-          "Failed to parse JSON response, creating structured response from text"
-        );
-        parsedResult = {
-          objects: [
-            {
-              label: "General Analysis",
-              description:
-                "Multiple objects detected - see raw text for details",
-            },
-          ],
-          summary:
-            result.substring(0, 200) + (result.length > 200 ? "..." : ""),
-        };
-      }
-
-      // Format the response to match expected interface
-      const objects = Array.isArray(parsedResult.objects)
-        ? parsedResult.objects.map((obj) => {
-            interface DetectedObject {
-              label: string;
-              description?: string;
-              confidence?: number;
-              boundingBox?: {
-                yMin: number;
-                xMin: number;
-                yMax: number;
-                xMax: number;
-              };
-            }
-
-            const result: DetectedObject = {
-              label: obj.label || "Unknown Object",
-              description: obj.description,
-              confidence: obj.confidence || undefined,
-            };
-
-            // Convert bounding box coordinates if provided
-            if (
-              obj.boundingBox &&
-              Array.isArray(obj.boundingBox) &&
-              obj.boundingBox.length === 4
-            ) {
-              // Gemini returns coordinates as [ymin, xmin, ymax, xmax] with values 0-1
-              const [yMin, xMin, yMax, xMax] = obj.boundingBox;
-              result.boundingBox = {
-                yMin: Math.max(0, Math.min(1, yMin)),
-                xMin: Math.max(0, Math.min(1, xMin)),
-                yMax: Math.max(0, Math.min(1, yMax)),
-                xMax: Math.max(0, Math.min(1, xMax)),
-              };
-            }
-
-            return result;
-          })
-        : [
-            {
-              label: "Analysis Result",
-              description: "Objects detected - see raw text for details",
-            },
-          ];
-
-      return {
-        objects,
-        rawText: result,
-      };
-    } catch (error: unknown) {
-      logger.error("Error in detectObjects:", error);
-      throw mapGeminiError(error, "detectObjects");
-    }
-  }
-
-  /**
-   * Generate an image from a text prompt using Gemini's Imagen 3.1 model
-   *
-   * This method generates images based on a text prompt using Google's Imagen 3.1 model.
-   * It supports various parameters to customize the generation process, including
-   * resolution, number of images, safety settings, and style options.
-   *
-   * @param prompt - Text description of the image to generate. Should be detailed and specific.
-   * @param modelName - Optional model to use (defaults to imagen-3.1-generate-003 if not specified)
-   * @param resolution - Image resolution: 512x512, 1024x1024, or 1536x1536 (default: 1024x1024)
-   * @param numberOfImages - Number of images to generate (1-8, default: 1)
-   * @param safetySettings - Content filtering options for blocking potentially harmful content
-   * @param negativePrompt - Elements to exclude from the generated image
-   * @param stylePreset - Visual style to apply (e.g., "photographic", "digital-art", "anime")
-   * @param seed - Optional seed for reproducible generation (integer value)
-   * @param styleStrength - Strength of the style preset (0.0-1.0, default: 0.5)
-   * @returns Promise resolving to generated images with metadata
-   * @throws {GeminiValidationError} If parameters are invalid
-   * @throws {GeminiContentFilterError} If content is filtered by safety settings
-   * @throws {GeminiQuotaError} If API quota is exceeded
-   * @throws {GeminiModelError} If the model encounters issues generating the image
-   * @throws {GeminiNetworkError} If a network error occurs
-   * @throws {GeminiApiError} For any other errors
-   */
-  public async generateImage(
-    prompt: string,
-    modelName?: string,
-    resolution?: "512x512" | "1024x1024" | "1536x1536",
-    numberOfImages?: number,
-    safetySettings?: SafetySetting[],
-    negativePrompt?: string,
-    stylePreset?: string,
-    seed?: number,
-    styleStrength?: number,
-    preferQuality?: boolean,
-    preferSpeed?: boolean
-  ): Promise<ImageGenerationResult> {
-    // Log with truncated prompt for privacy/security
-    logger.debug(`Generating image with prompt: ${prompt.substring(0, 30)}...`);
-
-    try {
-      // Import validation schemas and error handling
-      const { validateImageGenerationParams, DEFAULT_SAFETY_SETTINGS } =
-        await import("./gemini/GeminiValidationSchemas.js");
-
-      // Validate parameters using Zod schemas
-      const validatedParams = validateImageGenerationParams(
-        prompt,
-        modelName,
-        resolution,
-        numberOfImages,
-        safetySettings,
-        negativePrompt,
-        stylePreset,
-        seed,
-        styleStrength
-      );
-
-      const effectiveModel =
-        validatedParams.modelName ||
-        (await this.modelSelector.selectOptimalModel({
-          taskType: "image-generation",
-          preferQuality,
-          preferSpeed,
-          fallbackModel: "imagen-3.0-generate-002",
-        }));
-
-      // Get the imagen model from the SDK
-      // Use the models property with the type from our declaration file
-      const genAIModels = this.genAI.models;
-
-      const model = genAIModels.getGenerativeModel({
-        model: effectiveModel,
-      });
-
-      // Define a type for image generation config parameters
-      interface ImageGenerationConfig {
-        resolution: string;
-        numberOfImages?: number;
-        negativePrompt?: string;
-        stylePreset?: string;
-        seed?: number;
-        styleStrength?: number;
-        [key: string]: unknown; // For future flexibility while keeping type safety
-      }
-
-      // Prepare generation parameters
-      const generationConfig: ImageGenerationConfig = {
-        // Use validated parameters with defaults
-        resolution: validatedParams.resolution || "1024x1024",
-        numberOfImages: validatedParams.numberOfImages,
-      };
-
-      // Add optional parameters if provided
-      if (validatedParams.negativePrompt) {
-        generationConfig.negativePrompt = validatedParams.negativePrompt;
-      }
-
-      if (validatedParams.stylePreset) {
-        generationConfig.stylePreset = validatedParams.stylePreset;
-      }
-
-      if (validatedParams.seed !== undefined) {
-        generationConfig.seed = validatedParams.seed;
-      }
-
-      if (validatedParams.styleStrength !== undefined) {
-        generationConfig.styleStrength = validatedParams.styleStrength;
-      }
-
-      // Apply default safety settings if none provided
-      const effectiveSafetySettings =
-        validatedParams.safetySettings || DEFAULT_SAFETY_SETTINGS;
-
-      // Generate the images
-      const result = await model.generateImages({
-        prompt: validatedParams.prompt,
-        safetySettings: effectiveSafetySettings as GoogleSafetySetting[],
-        ...generationConfig,
-      });
-
-      // Validate response
-      if (!result.images || result.images.length === 0) {
-        throw new GeminiModelError(
-          GeminiErrorMessages.UNSUPPORTED_FORMAT,
-          effectiveModel
-        );
-      }
-
-      // Check for safety issues in response
-      if (result.promptSafetyMetadata?.blocked) {
-        throw new GeminiContentFilterError(
-          GeminiErrorMessages.CONTENT_FILTERED,
-          // The API response might not include reasons, but our error expects it
-          result.promptSafetyMetadata?.safetyRatings?.map(
-            (rating) => `${rating.category}: ${rating.probability}`
-          ) || []
-        );
-      }
-
-      // Extract width and height from resolution
-      const [width, height] = (validatedParams.resolution || "1024x1024")
-        .split("x")
-        .map((dim) => parseInt(dim, 10));
-
-      // Format the result according to our interface
-      const formattedResult: ImageGenerationResult = {
-        images: result.images.map(
-          (img: { data?: string; mimeType?: string }) => ({
-            base64Data: img.data || "",
-            mimeType: img.mimeType || "image/png",
-            width,
-            height,
-          })
-        ),
-        promptSafetyMetadata: result.promptSafetyMetadata
-          ? {
-              blocked: result.promptSafetyMetadata.blocked ?? false,
-              reasons: result.promptSafetyMetadata.safetyRatings?.map(
-                (rating) => `${rating.category}: ${rating.probability}`
-              ),
-              safetyRatings: result.promptSafetyMetadata.safetyRatings?.map(
-                (rating) => ({
-                  category: rating.category,
-                  severity: rating.category as
-                    | "SEVERITY_UNSPECIFIED"
-                    | "HARM_CATEGORY_DEROGATORY"
-                    | "HARM_CATEGORY_TOXICITY"
-                    | "HARM_CATEGORY_VIOLENCE"
-                    | "HARM_CATEGORY_SEXUAL"
-                    | "HARM_CATEGORY_MEDICAL"
-                    | "HARM_CATEGORY_DANGEROUS"
-                    | "HARM_CATEGORY_HARASSMENT"
-                    | "HARM_CATEGORY_HATE_SPEECH"
-                    | "HARM_CATEGORY_SEXUALLY_EXPLICIT"
-                    | "HARM_CATEGORY_DANGEROUS_CONTENT",
-                  probability: rating.probability as
-                    | "PROBABILITY_UNSPECIFIED"
-                    | "NEGLIGIBLE"
-                    | "LOW"
-                    | "MEDIUM"
-                    | "HIGH"
-                    | "VERY_HIGH",
-                })
-              ),
-            }
-          : undefined,
-        metadata: {
-          model: effectiveModel,
-          generationConfig,
-        },
-      };
-
-      // Validate output data integrity
-      this.validateGeneratedImages(formattedResult);
-
-      return formattedResult;
-    } catch (error: unknown) {
-      // Map to appropriate error type
-      throw mapGeminiError(error, "generateImage");
-    }
-  }
-
-  /**
-   * Validates generated images to ensure they meet quality and safety standards
-   * @param result - The image generation result to validate
-   * @throws {GeminiValidationError} If validation fails
-   */
-  private validateGeneratedImages(result: ImageGenerationResult): void {
-    // Check that each image has proper data
-    for (const [index, image] of result.images.entries()) {
-      // Verify base64 data is present and valid
-      if (!image.base64Data || image.base64Data.length < 100) {
-        throw new GeminiValidationError(
-          `Image ${index} has invalid or missing data`,
-          "base64Data"
-        );
-      }
-
-      // Verify MIME type is supported
-      const supportedMimeTypes = ["image/png", "image/jpeg", "image/webp"];
-      if (!supportedMimeTypes.includes(image.mimeType)) {
-        throw new GeminiValidationError(
-          `Image ${index} has unsupported MIME type: ${image.mimeType}`,
-          "mimeType"
-        );
-      }
-
-      // Verify dimensions are positive numbers
-      if (image.width <= 0 || image.height <= 0) {
-        throw new GeminiValidationError(
-          `Image ${index} has invalid dimensions: ${image.width}x${image.height}`,
-          "dimensions"
-        );
-      }
-    }
-  }
-
-  /**
-   * Gets the current secure base directory if set
-   */
-  public getSecureBasePath(): string | undefined {
-    return this.fileSecurityService.getSecureBasePath();
   }
 
   public async *generateContentStream(
@@ -1071,6 +449,216 @@ Description: ${pullRequest.body || "No description"}`;
     }
   }
 
+  /**
+   * Generates images from text prompts using Google's image generation models
+   * Supports both Gemini and Imagen models for image generation
+   *
+   * @param prompt - The text prompt describing the desired image
+   * @param modelName - Optional model name (defaults to optimal model selection)
+   * @param resolution - Optional image resolution (512x512, 1024x1024, 1536x1536)
+   * @param numberOfImages - Optional number of images to generate (1-8)
+   * @param safetySettings - Optional safety settings for content filtering
+   * @param negativePrompt - Optional text describing what to avoid in the image
+   * @param stylePreset - Optional visual style to apply
+   * @param seed - Optional seed for reproducible generation
+   * @param styleStrength - Optional strength of style preset (0.0-1.0)
+   * @param preferQuality - Optional preference for quality over speed
+   * @param preferSpeed - Optional preference for speed over quality
+   * @returns Promise resolving to image generation result with base64 data
+   * @throws {GeminiValidationError} If parameters are invalid
+   * @throws {GeminiContentFilterError} If content is blocked by safety filters
+   * @throws {GeminiQuotaError} If API quota is exceeded
+   * @throws {GeminiModelError} If the model encounters issues generating the image
+   * @throws {GeminiNetworkError} If a network error occurs
+   * @throws {GeminiApiError} For any other errors
+   */
+  public async generateImage(
+    prompt: string,
+    modelName?: string,
+    resolution?: "512x512" | "1024x1024" | "1536x1536",
+    numberOfImages?: number,
+    safetySettings?: SafetySetting[],
+    negativePrompt?: string,
+    stylePreset?: string,
+    seed?: number,
+    styleStrength?: number,
+    preferQuality?: boolean,
+    preferSpeed?: boolean
+  ): Promise<ImageGenerationResult> {
+    // Log with truncated prompt for privacy/security
+    logger.debug(`Generating image with prompt: ${prompt.substring(0, 30)}...`);
+
+    try {
+      // Import validation schemas and error handling
+      const { validateImageGenerationParams, DEFAULT_SAFETY_SETTINGS } =
+        await import("./gemini/GeminiValidationSchemas.js");
+      const {
+        GeminiContentFilterError,
+        GeminiModelError,
+        GeminiErrorMessages,
+      } = await import("../utils/geminiErrors.js");
+
+      // Validate parameters using Zod schemas
+      const validatedParams = validateImageGenerationParams(
+        prompt,
+        modelName,
+        resolution,
+        numberOfImages,
+        safetySettings,
+        negativePrompt,
+        stylePreset,
+        seed,
+        styleStrength
+      );
+
+      const effectiveModel =
+        validatedParams.modelName ||
+        (await this.modelSelector.selectOptimalModel({
+          taskType: "image-generation",
+          preferQuality,
+          preferSpeed,
+          fallbackModel: "imagen-3.0-generate-002",
+        }));
+
+      // Get the model from the SDK
+      const model = this.genAI.getGenerativeModel({
+        model: effectiveModel,
+      });
+
+      // Build generation config based on validated parameters
+      const generationConfig: {
+        numberOfImages: number;
+        width?: number;
+        height?: number;
+        negativePrompt?: string;
+        stylePreset?: string;
+        seed?: number;
+        styleStrength?: number;
+      } = {
+        numberOfImages: validatedParams.numberOfImages,
+      };
+
+      if (validatedParams.resolution) {
+        const [width, height] = validatedParams.resolution
+          .split("x")
+          .map((dim) => parseInt(dim, 10));
+        generationConfig.width = width;
+        generationConfig.height = height;
+      }
+
+      if (validatedParams.negativePrompt) {
+        generationConfig.negativePrompt = validatedParams.negativePrompt;
+      }
+
+      if (validatedParams.stylePreset) {
+        generationConfig.stylePreset = validatedParams.stylePreset;
+      }
+
+      if (validatedParams.seed !== undefined) {
+        generationConfig.seed = validatedParams.seed;
+      }
+
+      if (validatedParams.styleStrength !== undefined) {
+        generationConfig.styleStrength = validatedParams.styleStrength;
+      }
+
+      // Apply default safety settings if none provided
+      const effectiveSafetySettings =
+        validatedParams.safetySettings ||
+        (DEFAULT_SAFETY_SETTINGS as SafetySetting[]);
+
+      // Generate the images using the correct generateImages API
+      const result = await model.generateImages({
+        prompt: validatedParams.prompt,
+        safetySettings: effectiveSafetySettings as SafetySetting[],
+        ...generationConfig,
+      });
+
+      // Check for safety blocks first (higher priority than empty results)
+      if (result.promptSafetyMetadata?.blocked) {
+        const safetyRatings = result.promptSafetyMetadata.safetyRatings || [];
+        throw new GeminiContentFilterError(
+          GeminiErrorMessages.CONTENT_FILTERED,
+          safetyRatings.map((rating) => rating.category)
+        );
+      }
+
+      // Check if images were generated successfully
+      if (!result.images || result.images.length === 0) {
+        throw new GeminiModelError(
+          "No images were generated by the model",
+          "image_generation"
+        );
+      }
+
+      // Parse resolution for width/height
+      const [width, height] = (validatedParams.resolution || "1024x1024")
+        .split("x")
+        .map((dim) => parseInt(dim, 10));
+
+      // Format the images according to our expected structure
+      const formattedImages = result.images.map((image) => ({
+        base64Data: image.data || "",
+        mimeType: image.mimeType || "image/png",
+        width,
+        height,
+      }));
+
+      const formattedResult: ImageGenerationResult = {
+        images: formattedImages,
+      };
+
+      // Validate the generated images
+      await this.validateGeneratedImages(formattedResult);
+
+      return formattedResult;
+    } catch (error: unknown) {
+      const { mapGeminiError } = await import("../utils/geminiErrors.js");
+      // Map to appropriate error type
+      throw mapGeminiError(error, "generateImage");
+    }
+  }
+
+  /**
+   * Validates generated images to ensure they meet quality and safety standards
+   * @param result - The image generation result to validate
+   * @throws {GeminiValidationError} If validation fails
+   */
+  private async validateGeneratedImages(
+    result: ImageGenerationResult
+  ): Promise<void> {
+    // Import validation error from utils
+    const { GeminiValidationError } = await import("../utils/geminiErrors.js");
+
+    // Check that each image has proper data
+    for (const [index, image] of result.images.entries()) {
+      // Verify base64 data is present and valid
+      if (!image.base64Data || image.base64Data.length < 100) {
+        throw new GeminiValidationError(
+          `Image ${index} has invalid or missing data`,
+          "base64Data"
+        );
+      }
+
+      // Verify MIME type is supported
+      const supportedMimeTypes = ["image/png", "image/jpeg", "image/webp"];
+      if (!supportedMimeTypes.includes(image.mimeType)) {
+        throw new GeminiValidationError(
+          `Image ${index} has unsupported MIME type: ${image.mimeType}`,
+          "mimeType"
+        );
+      }
+
+      // Verify dimensions are positive numbers
+      if (image.width <= 0 || image.height <= 0) {
+        throw new GeminiValidationError(
+          `Image ${index} has invalid dimensions: ${image.width}x${image.height}`,
+          "dimensions"
+        );
+      }
+    }
+  }
+
   private async selectModelForGeneration(params: {
     modelName?: string;
     preferQuality?: boolean;
@@ -1192,8 +780,6 @@ export interface GenerateContentParams {
   safetySettings?: SafetySetting[];
   systemInstruction?: Content | string;
   cachedContentName?: string;
-  fileReferenceOrInlineData?: FileId | ImagePart | FileMetadata | string;
-  inlineDataMimeType?: string;
   urlContext?: {
     urls: string[];
     fetchOptions?: {
@@ -1262,6 +848,5 @@ export type {
   SafetySetting,
   Part,
   FunctionCall,
-  FileId,
   CacheId,
 } from "./gemini/GeminiTypes.js";

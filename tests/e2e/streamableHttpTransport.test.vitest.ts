@@ -1,8 +1,12 @@
-import { describe, it, beforeEach, afterEach, expect, vi } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 import { MCPTestClient } from "./clients/mcp-test-client.js";
 import { spawn, ChildProcess } from "node:child_process";
-import { setTimeout as sleep } from "node:timers/promises";
-import EventSource from "eventsource";
+
+interface Tool {
+  name: string;
+  description?: string;
+  inputSchema?: unknown;
+}
 
 describe("Streamable HTTP Transport E2E Tests", () => {
   let serverProcess: ChildProcess | null = null;
@@ -169,7 +173,7 @@ describe("Streamable HTTP Transport E2E Tests", () => {
       expect(result.tools.length).toBeGreaterThan(0);
 
       // Check for some expected tools
-      const toolNames = result.tools.map((t) => t.name);
+      const toolNames = (result.tools as Tool[]).map((t) => t.name);
       expect(toolNames).toContain("gemini_generate_content");
       expect(toolNames).toContain("gemini_start_chat");
     });
@@ -182,8 +186,8 @@ describe("Streamable HTTP Transport E2E Tests", () => {
 
       expect(result).toBeDefined();
       expect(result.content).toBeDefined();
-      expect(result.content[0]).toBeDefined();
-      expect(result.content[0].text).toBeTruthy();
+      expect(result.content?.[0]).toBeDefined();
+      expect(result.content?.[0].text).toBeTruthy();
     });
 
     it("should handle tool errors gracefully", async () => {
@@ -199,19 +203,15 @@ describe("Streamable HTTP Transport E2E Tests", () => {
     it("should stream content using SSE", async () => {
       const chunks: string[] = [];
 
-      await client.streamTool(
-        "gemini_generate_content_stream",
-        {
-          prompt: "Count from 1 to 3",
-          modelName: "gemini-1.5-flash",
-        },
-        (chunk) => {
-          chunks.push(chunk);
-        }
-      );
+      const stream = await client.streamTool("gemini_generate_content_stream", {
+        prompt: "Count from 1 to 3",
+        modelName: "gemini-1.5-flash",
+      });
 
-      // Wait for streaming to complete
-      await sleep(2000);
+      // Collect chunks from the async iterable
+      for await (const chunk of stream) {
+        chunks.push(String(chunk));
+      }
 
       expect(chunks.length).toBeGreaterThan(0);
       expect(chunks.join("")).toContain("1");
@@ -224,14 +224,10 @@ describe("Streamable HTTP Transport E2E Tests", () => {
       client.sessionId = "invalid-session-id";
 
       await expect(
-        client.streamTool(
-          "gemini_generate_content_stream",
-          {
-            prompt: "Test",
-            modelName: "gemini-1.5-flash",
-          },
-          () => {}
-        )
+        client.streamTool("gemini_generate_content_stream", {
+          prompt: "Test",
+          modelName: "gemini-1.5-flash",
+        })
       ).rejects.toThrow();
     });
   });

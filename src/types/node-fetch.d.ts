@@ -13,7 +13,7 @@ declare module "node-fetch" {
     compress?: boolean;
     size?: number;
     follow?: number;
-    agent?: any;
+    agent?: import("http").Agent | import("https").Agent | false;
   }
 
   export default function fetch(
@@ -26,7 +26,7 @@ declare module "node-fetch" {
     status: number;
     statusText: string;
     headers: Headers;
-    json(): Promise<any>;
+    json(): Promise<unknown>;
     text(): Promise<string>;
     buffer(): Promise<Buffer>;
     arrayBuffer(): Promise<ArrayBuffer>;

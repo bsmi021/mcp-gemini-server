@@ -1,321 +1,311 @@
-import { describe, it, beforeEach, afterEach, expect, vi } from "vitest";
+/**
+ * Test suite for Gemini image generation functionality
+ * Covers the refactored generateImage method using the correct generateImages API
+ */
+
+// Using vitest globals - see vitest.config.ts globals: true
 import { GeminiService } from "../../../../src/services/GeminiService.js";
 import {
-  GeminiApiError,
+  GeminiContentFilterError,
   GeminiModelError,
-  GeminiErrorMessages,
+  GeminiValidationError,
 } from "../../../../src/utils/geminiErrors.js";
-import { ImageGenerationResult } from "../../../../src/types/index.js";
-import * as dotenv from "dotenv";
-import { resolve } from "path";
 
-// Load environment variables from .env file
-dotenv.config({
-  path: resolve(process.cwd(), ".env"),
+// Mock the GoogleGenAI class before importing
+vi.mock("@google/genai", async (importOriginal: any) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    GoogleGenAI: vi.fn(),
+  };
 });
 
+// Mock ConfigurationManager singleton
+vi.mock("../../../../src/config/ConfigurationManager.js", () => ({
+  ConfigurationManager: {
+    getInstance: vi.fn(() => ({
+      getGeminiServiceConfig: vi.fn(() => ({
+        apiKey: "test-api-key",
+        defaultModel: "gemini-2.0-flash-preview",
+      })),
+      getModelConfiguration: vi.fn(() => ({
+        default: "gemini-2.0-flash-preview",
+        imageGeneration: "imagen-3.0-generate-002",
+      })),
+      getGitHubApiToken: vi.fn(() => "test-github-token"),
+    })),
+  },
+}));
+
+// Mock ModelSelectionService constructor
+vi.mock("../../../../src/services/ModelSelectionService.js", () => ({
+  ModelSelectionService: vi.fn(() => ({
+    selectOptimalModel: vi.fn(() => Promise.resolve("imagen-3.0-generate-002")),
+  })),
+}));
+
+// Mock GitHubApiService constructor
+vi.mock("../../../../src/services/gemini/GitHubApiService.js", () => ({
+  GitHubApiService: vi.fn(() => ({})),
+}));
+
+// Mock the Google GenAI SDK
+const mockGenerateImages = vi.fn();
+const mockGetGenerativeModel = vi.fn(() => ({
+  generateImages: mockGenerateImages,
+}));
+
+const mockGenAI = {
+  getGenerativeModel: mockGetGenerativeModel,
+};
+
 describe("GeminiService - Image Generation", () => {
-  // Define types for our mock functions
-  type GenerateImagesFunc = (params: any) => Promise<{
-    images: Array<{ data: string; mimeType: string }>;
-    promptSafetyMetadata?: { blocked: boolean };
-  }>;
-
-  type GetModelFunc = (params: { model: string }) => {
-    generateImages: GenerateImagesFunc;
-  };
-
-  // Create properly typed mocks using vitest
-  const mockGenerateImages = vi.fn<any, any>();
-  const mockGetGenerativeModel = vi.fn<any, any>();
-
-  // Mock response data
-  const mockImageResponse = {
-    images: [
-      {
-        data: "mockBase64Data",
-        mimeType: "image/png",
-      },
-    ],
-    promptSafetyMetadata: {
-      blocked: false,
-    },
-  };
-
-  // Save original environment variable
-  const origEnv = process.env.GOOGLE_GEMINI_API_KEY;
+  let service: GeminiService;
 
   beforeEach(() => {
-    // Set API key for testing
-    process.env.GOOGLE_GEMINI_API_KEY = "test-api-key";
+    vi.clearAllMocks();
 
-    // Reset the mocks before each test
-    vi.resetAllMocks();
+    // Create service instance (now uses mocked singletons)
+    service = new GeminiService();
 
-    // Configure the mock behavior with properly typed implementations
-    mockGenerateImages.mockImplementation((params) => {
-      return Promise.resolve(mockImageResponse);
-    });
+    // Replace the genAI instance with our mock
+    (service as any).genAI = mockGenAI;
+  });
 
-    mockGetGenerativeModel.mockImplementation((params) => {
-      return {
-        generateImages: mockGenerateImages,
-      };
-    });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
-    // Directly override the generateImage method for testing
-    const originalGenerateImage = GeminiService.prototype.generateImage;
-    GeminiService.prototype.generateImage = async function (
-      prompt,
-      modelName,
-      resolution,
-      numberOfImages,
-      safetySettings,
-      negativePrompt,
-      stylePreset,
-      seed,
-      styleStrength
-    ) {
-      try {
-        // This is our simplified version for testing that will make the tests pass
-        const effectiveModel = modelName || "imagen-3.1-generate-003";
-
-        // Call mockGetGenerativeModel first to increment call count for assertions
-        mockGetGenerativeModel({
-          model: effectiveModel,
-        });
-
-        // Prepare generation config with proper typing
-        const generationConfig: Record<
-          string,
-          string | number | object | boolean | undefined
-        > = {
-          resolution: resolution || "1024x1024",
-          numberOfImages: numberOfImages || 1,
-        };
-
-        if (negativePrompt) generationConfig.negativePrompt = negativePrompt;
-        if (stylePreset) generationConfig.stylePreset = stylePreset;
-        if (seed !== undefined) generationConfig.seed = seed;
-        if (styleStrength !== undefined)
-          generationConfig.styleStrength = styleStrength;
-
-        // Call the mocked generateImages function with the appropriate parameters
-        // This will increment the call count for assertions
-        const result = await mockGenerateImages({
-          prompt,
-          safetySettings: safetySettings || [],
-          ...generationConfig,
-          resolution: resolution || "1024x1024",
-          numberOfImages: numberOfImages || 1,
-        });
-
-        // Check for empty results
-        if (!result.images || result.images.length === 0) {
-          throw new GeminiModelError(
-            GeminiErrorMessages.UNSUPPORTED_FORMAT,
-            effectiveModel
-          );
-        }
-
-        // Extract width and height from resolution
-        const [width, height] = (resolution || "1024x1024")
-          .split("x")
-          .map((dim) => parseInt(dim, 10));
-
-        // Format the result according to our interface
-        return {
-          images: result.images.map((img) => ({
-            base64Data: img.data || "",
-            mimeType: img.mimeType || "image/png",
-            width,
-            height,
-          })),
-          promptSafetyMetadata: result.promptSafetyMetadata || undefined,
-          metadata: {
-            model: effectiveModel,
-            generationConfig,
-          },
-        };
-      } catch (error) {
-        // Re-throw errors but ensure they're the right type for the tests
-        if (
-          error instanceof Error &&
-          error.message === "API rate limit exceeded"
-        ) {
-          throw new GeminiApiError(error.message);
-        }
-        throw error;
-      }
+  describe("generateImage", () => {
+    const mockImageResponse = {
+      images: [
+        {
+          data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==".repeat(
+            5
+          ), // Make it long enough
+          mimeType: "image/png",
+        },
+      ],
+      promptSafetyMetadata: {
+        blocked: false,
+      },
     };
 
-    // Make sure to store the original to restore it in afterEach
-    (GeminiService as any)._originalGenerateImage = originalGenerateImage;
-  });
+    it("should generate images successfully with default parameters", async () => {
+      mockGenerateImages.mockResolvedValue(mockImageResponse);
 
-  // Restore original environment variable and method after tests
-  afterEach(() => {
-    // Restore API key
-    process.env.GOOGLE_GEMINI_API_KEY = origEnv;
+      const result = await service.generateImage("A beautiful sunset");
 
-    // Restore original method
-    if ((GeminiService as any)._originalGenerateImage) {
-      GeminiService.prototype.generateImage = (
-        GeminiService as any
-      )._originalGenerateImage;
-      delete (GeminiService as any)._originalGenerateImage;
-    }
-  });
+      expect(mockGenerateImages).toHaveBeenCalledWith({
+        prompt: "A beautiful sunset",
+        safetySettings: expect.any(Array),
+        numberOfImages: 1,
+      });
 
-  it("should generate an image with default parameters", async () => {
-    // Arrange
-    const service = new GeminiService();
-    const prompt = "A serene mountain landscape at sunset";
-
-    // Act
-    const result = await service.generateImage(prompt);
-
-    // Assert
-    expect(mockGetGenerativeModel).toHaveBeenCalledTimes(1);
-    expect(mockGetGenerativeModel).toHaveBeenCalledWith({
-      model: "imagen-3.1-generate-003", // Updated to match current implementation
+      expect(result).toEqual({
+        images: [
+          {
+            base64Data:
+              "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==".repeat(
+                5
+              ),
+            mimeType: "image/png",
+            width: 1024,
+            height: 1024,
+          },
+        ],
+      });
     });
 
-    expect(mockGenerateImages).toHaveBeenCalledTimes(1);
-    // Don't check the exact parameters since our mock implementation has extra fields
-    const args = mockGenerateImages.mock.calls[0][0];
-    expect(args.prompt).toBe(prompt);
-    expect(args.resolution).toBe("1024x1024");
-    expect(args.numberOfImages).toBe(1);
+    it("should generate images with custom parameters", async () => {
+      mockGenerateImages.mockResolvedValue({
+        images: [
+          {
+            data: "test-base64-data-1".repeat(10), // Make it long enough
+            mimeType: "image/png",
+          },
+          {
+            data: "test-base64-data-2".repeat(10), // Make it long enough
+            mimeType: "image/png",
+          },
+        ],
+        promptSafetyMetadata: { blocked: false },
+      });
 
-    // Verify the result structure
-    expect(result).toHaveProperty("images");
-    expect(result.images.length).toBe(1);
-    expect(result.images[0].base64Data).toBe("mockBase64Data");
-    expect(result.images[0].mimeType).toBe("image/png");
-    expect(result.images[0].width).toBe(1024);
-    expect(result.images[0].height).toBe(1024);
-  });
+      const result = await service.generateImage(
+        "A cyberpunk cityscape",
+        "imagen-3.0-generate-002",
+        "512x512",
+        2,
+        undefined,
+        "avoid dark colors",
+        "photorealistic",
+        12345,
+        0.8,
+        true,
+        false
+      );
 
-  it("should generate an image with custom parameters", async () => {
-    // Reset mock call counts before this test to ensure clean state
-    vi.clearAllMocks();
+      expect(mockGenerateImages).toHaveBeenCalledWith({
+        prompt: "A cyberpunk cityscape",
+        safetySettings: expect.any(Array),
+        numberOfImages: 2,
+        width: 512,
+        height: 512,
+        negativePrompt: "avoid dark colors",
+        stylePreset: "photorealistic",
+        seed: 12345,
+        styleStrength: 0.8,
+      });
 
-    // Arrange
-    const service = new GeminiService();
-    const prompt = "A futuristic cityscape";
-    const modelName = "gemini-2.0-flash-exp";
-    const resolution = "512x512";
-    const numberOfImages = 2;
-    // Using type assertion to match the type expected by the service
-    const safetySettings = [
-      {
-        category: "HARM_CATEGORY_HARASSMENT",
-        threshold: "BLOCK_MEDIUM_AND_ABOVE",
-      },
-    ] as any;
-    const negativePrompt = "cars, traffic";
-
-    // Act
-    const result = await service.generateImage(
-      prompt,
-      modelName,
-      resolution,
-      numberOfImages,
-      safetySettings,
-      negativePrompt
-    );
-
-    // Assert
-    expect(mockGetGenerativeModel).toHaveBeenCalledTimes(1);
-    expect(mockGetGenerativeModel).toHaveBeenCalledWith({
-      model: "gemini-2.0-flash-exp",
+      expect(result).toEqual({
+        images: [
+          {
+            base64Data: "test-base64-data-1".repeat(10),
+            mimeType: "image/png",
+            width: 512,
+            height: 512,
+          },
+          {
+            base64Data: "test-base64-data-2".repeat(10),
+            mimeType: "image/png",
+            width: 512,
+            height: 512,
+          },
+        ],
+      });
     });
 
-    expect(mockGenerateImages).toHaveBeenCalledTimes(1);
+    it("should handle safety filtering", async () => {
+      mockGenerateImages.mockResolvedValue({
+        images: [],
+        promptSafetyMetadata: {
+          blocked: true,
+          safetyRatings: [
+            {
+              category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+              probability: "HIGH",
+            },
+          ],
+        },
+      });
 
-    // Only check specific parameters instead of full object equality
-    const args = mockGenerateImages.mock.calls[0][0];
-    expect(args.prompt).toBe(prompt);
-    expect(args.resolution).toBe("512x512");
-    expect(args.numberOfImages).toBe(2);
-    expect(args.negativePrompt).toBe(negativePrompt);
-    expect(args.safetySettings).toEqual(safetySettings);
+      await expect(
+        service.generateImage("How to make explosives")
+      ).rejects.toThrow(GeminiContentFilterError);
 
-    // Verify width and height from the specified resolution
-    expect(result.images[0].width).toBe(512);
-    expect(result.images[0].height).toBe(512);
-  });
-
-  it("should handle errors from the API", async () => {
-    // Reset mock call counts before this test to ensure clean state
-    vi.clearAllMocks();
-
-    // Arrange
-    const service = new GeminiService();
-    const prompt = "A black hole eating a planet";
-    const errorMessage = "API rate limit exceeded";
-
-    // Configure mock to throw an error
-    mockGenerateImages.mockImplementation(() => {
-      throw new Error(errorMessage);
+      expect(mockGenerateImages).toHaveBeenCalled();
     });
 
-    // Act & Assert
-    await expect(service.generateImage(prompt)).rejects.toThrow(GeminiApiError);
-  });
+    it("should handle empty images response", async () => {
+      mockGenerateImages.mockResolvedValue({
+        images: [],
+        promptSafetyMetadata: { blocked: false },
+      });
 
-  it("should throw an error when no images are generated", async () => {
-    // Reset mock call counts before this test to ensure clean state
-    vi.clearAllMocks();
-
-    // Arrange
-    const service = new GeminiService();
-    const prompt = "Empty result test";
-
-    // Configure mock to return empty images array with proper typing
-    mockGenerateImages.mockImplementation((params) => {
-      return Promise.resolve({ images: [] });
+      await expect(service.generateImage("A simple drawing")).rejects.toThrow(
+        GeminiModelError
+      );
+      await expect(service.generateImage("A simple drawing")).rejects.toThrow(
+        "No images were generated by the model"
+      );
     });
 
-    // Act & Assert
-    await expect(service.generateImage(prompt)).rejects.toThrow(
-      GeminiModelError
-    );
-    await expect(service.generateImage(prompt)).rejects.toThrow(
-      GeminiErrorMessages.UNSUPPORTED_FORMAT
-    );
-  });
+    it("should handle missing images in response", async () => {
+      mockGenerateImages.mockResolvedValue({
+        promptSafetyMetadata: { blocked: false },
+      });
 
-  it("should support advanced style parameters", async () => {
-    // Reset mock call counts before this test to ensure clean state
-    vi.clearAllMocks();
+      await expect(service.generateImage("A simple drawing")).rejects.toThrow(
+        GeminiModelError
+      );
+    });
 
-    // Arrange
-    const service = new GeminiService();
-    const prompt = "Test advanced parameters";
-    const stylePreset = "anime";
-    const seed = 12345;
-    const styleStrength = 0.8;
+    it("should validate generated images", async () => {
+      mockGenerateImages.mockResolvedValue({
+        images: [
+          {
+            data: "short", // Too short base64 data
+            mimeType: "image/png",
+          },
+        ],
+        promptSafetyMetadata: { blocked: false },
+      });
 
-    // Act
-    await service.generateImage(
-      prompt,
-      undefined,
-      undefined,
-      1,
-      undefined,
-      undefined,
-      stylePreset,
-      seed,
-      styleStrength
-    );
+      await expect(service.generateImage("A simple drawing")).rejects.toThrow(
+        GeminiValidationError
+      );
+    });
 
-    // Assert
-    expect(mockGenerateImages).toHaveBeenCalledTimes(1);
-    const callArgs = mockGenerateImages.mock.calls[0][0];
-    expect(callArgs.stylePreset).toBe("anime");
-    expect(callArgs.seed).toBe(12345);
-    expect(callArgs.styleStrength).toBe(0.8);
+    it("should handle invalid MIME types", async () => {
+      mockGenerateImages.mockResolvedValue({
+        images: [
+          {
+            data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+            mimeType: "image/gif", // Unsupported MIME type
+          },
+        ],
+        promptSafetyMetadata: { blocked: false },
+      });
+
+      await expect(service.generateImage("A simple drawing")).rejects.toThrow(
+        GeminiValidationError
+      );
+    });
+
+    it("should use model selection when no specific model provided", async () => {
+      mockGenerateImages.mockResolvedValue(mockImageResponse);
+
+      // Access the service's model selector and spy on it
+      const modelSelector = (service as any).modelSelector;
+      const selectOptimalModelSpy = vi
+        .spyOn(modelSelector, "selectOptimalModel")
+        .mockResolvedValue("imagen-3.0-generate-002");
+
+      await service.generateImage("Test prompt");
+
+      expect(selectOptimalModelSpy).toHaveBeenCalledWith({
+        taskType: "image-generation",
+        preferQuality: undefined,
+        preferSpeed: undefined,
+        fallbackModel: "imagen-3.0-generate-002",
+      });
+    });
+
+    it("should handle API errors", async () => {
+      const apiError = new Error("API quota exceeded");
+      mockGenerateImages.mockRejectedValue(apiError);
+
+      await expect(service.generateImage("Test prompt")).rejects.toThrow();
+    });
+
+    it("should handle different resolutions", async () => {
+      const largeImageResponse = {
+        images: [
+          {
+            data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==".repeat(
+              5
+            ),
+            mimeType: "image/png",
+          },
+        ],
+        promptSafetyMetadata: {
+          blocked: false,
+        },
+      };
+
+      mockGenerateImages.mockResolvedValue(largeImageResponse);
+
+      // Test 1536x1536 resolution
+      await service.generateImage("Test", undefined, "1536x1536");
+
+      expect(mockGenerateImages).toHaveBeenCalledWith({
+        prompt: "Test",
+        safetySettings: expect.any(Array),
+        numberOfImages: 1,
+        width: 1536,
+        height: 1536,
+      });
+    });
   });
 });

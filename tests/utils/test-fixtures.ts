@@ -19,9 +19,9 @@ export const TEST_DATA = {
 
   // Sample model names
   MODELS: {
-    PRO: "gemini-1.5-pro-latest",
-    FLASH: "gemini-1.5-flash-latest",
-    GEMINI_2: "gemini-2.5-pro-exp-03-25",
+    PRO: "gemini-1.5-pro",
+    FLASH: "gemini-1.5-flash",
+    GEMINI_2: "gemini-2.5-pro-preview-05-06",
     UNSUPPORTED: "gemini-unsupported-model",
   },
 

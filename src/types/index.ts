@@ -1,7 +1,13 @@
 ﻿// Export all types and interfaces from this barrel file
 export * from "./exampleServiceTypes.js";
-export * from "./geminiServiceTypes.js"; // Exports GeminiServiceConfig, FileMetadata, CachedContentMetadata, PartSchema, ContentSchema
+export * from "./geminiServiceTypes.js"; // Exports GeminiServiceConfig, CachedContentMetadata, PartSchema, ContentSchema
 export * from "./serverTypes.js"; // Server state and service interface types
+
+// Export type-safe schema types from tool schemas
+export type {
+  FunctionParameter,
+  InferredFunctionParameter,
+} from "../tools/schemas/CommonSchemas.js";
 
 // Define common types used across services/tools if any
 export interface CommonContext {

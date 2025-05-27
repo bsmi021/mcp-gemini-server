@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { exampleToolSchema } from "../../../../src/tools/schemas/exampleToolParams.js";
-import { geminiGenerateContentSchema } from "../../../../src/tools/schemas/geminiGenerateContentParams.js";
+// Using vitest globals - see vitest.config.ts globals: true
+import { exampleToolSchema } from "../../../../src/tools/exampleToolParams.js";
+import { geminiGenerateContentSchema } from "../../../../src/tools/geminiGenerateContentConsolidatedParams.js";
 import { writeToFileSchema } from "../../../../src/tools/schemas/writeToFileParams.js";
 
 /**
@@ -165,7 +165,7 @@ describe("Tool Parameter Schemas", () => {
       const validParams = {
         filePath: "/path/to/file.txt",
         content: "File content",
-        encoding: "base64",
+        encoding: "utf8",
         overwriteFile: true,
       };
 
@@ -173,21 +173,24 @@ describe("Tool Parameter Schemas", () => {
       expect(result.success).toBe(true);
     });
 
-    it("should validate with different encoding options", () => {
+    it("should validate with utf8 encoding", () => {
       const utf8Params = {
         filePath: "/path/to/file.txt",
         content: "File content",
         encoding: "utf8",
       };
 
+      expect(writeToFileSchema.safeParse(utf8Params).success).toBe(true);
+    });
+
+    it("should reject unsupported encoding", () => {
       const base64Params = {
         filePath: "/path/to/file.txt",
         content: "File content",
         encoding: "base64",
       };
 
-      expect(writeToFileSchema.safeParse(utf8Params).success).toBe(true);
-      expect(writeToFileSchema.safeParse(base64Params).success).toBe(true);
+      expect(writeToFileSchema.safeParse(base64Params).success).toBe(false);
     });
 
     it("should reject empty file path", () => {
@@ -204,7 +207,7 @@ describe("Tool Parameter Schemas", () => {
       const invalidParams = {
         filePath: "/path/to/file.txt",
         content: "File content",
-        encoding: "binary", // Not in ['utf8', 'base64']
+        encoding: "binary", // Not in ['utf8']
       };
 
       const result = writeToFileSchema.safeParse(invalidParams);

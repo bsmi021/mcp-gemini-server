@@ -1,6 +1,6 @@
 import { ConfigurationManager } from "../config/ConfigurationManager.js";
 import { GeminiUrlValidationError } from "./geminiErrors.js";
-import { Logger } from "./logger.js";
+import { logger } from "./logger.js";
 
 export interface UrlValidationResult {
   valid: boolean;
@@ -21,7 +21,7 @@ export interface SecurityMetrics {
  * Prevents access to malicious, private, or restricted URLs
  */
 export class UrlSecurityService {
-  private readonly logger: Logger;
+  private readonly logger: typeof logger;
   private readonly securityMetrics: SecurityMetrics;
 
   // Known dangerous TLDs and patterns
@@ -40,17 +40,13 @@ export class UrlSecurityService {
 
   // Suspicious URL patterns
   private readonly suspiciousPatterns = [
-    /[\u0000-\u001f\u007f-\u009f]/, // Control characters
-    /[^\x00-\x7F].*[^\x00-\x7F]/, // Multiple non-ASCII characters (potential IDN homograph)
     /\.\./, // Path traversal
     /@.*@/, // Multiple @ symbols
     /javascript:/i, // JavaScript protocol
     /data:/i, // Data URLs
     /file:/i, // File protocol
     /ftp:/i, // FTP protocol
-    /[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/, // Raw IP addresses
     /localhost|127\.0\.0\.1|0\.0\.0\.0/i, // Localhost
-    /(10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|192\.168\.)/i, // Private IP ranges
     /\.(local|internal|private|corp|lan)$/i, // Internal domains
     /%[0-9a-f]{2}/i, // URL encoding (suspicious in domain names)
     /[<>{}\\^`|"]/i, // Dangerous characters
@@ -78,7 +74,7 @@ export class UrlSecurityService {
   ];
 
   constructor(private readonly config: ConfigurationManager) {
-    this.logger = new Logger({ component: "UrlSecurityService" });
+    this.logger = logger;
     this.securityMetrics = {
       validationAttempts: 0,
       validationFailures: 0,
@@ -182,7 +178,6 @@ export class UrlSecurityService {
     try {
       const response = await fetch(url, {
         method: "HEAD",
-        timeout: 5000,
         headers: {
           "User-Agent": "MCP-Gemini-Server-HealthCheck/1.0",
         },
@@ -241,6 +236,13 @@ export class UrlSecurityService {
   ): UrlValidationResult {
     const warnings: string[] = [];
 
+    // Check for control characters
+    if (this.hasControlCharacters(url)) {
+      const reason = "Control characters detected in URL";
+      this.securityMetrics.suspiciousPatterns.push(reason);
+      return { valid: false, reason };
+    }
+
     // Check each suspicious pattern
     for (const pattern of this.suspiciousPatterns) {
       if (pattern.test(url)) {
@@ -258,6 +260,9 @@ export class UrlSecurityService {
 
     // Check for IDN homograph attacks
     if (this.detectIdnHomograph(parsedUrl.hostname)) {
+      this.logger.warn("IDN homograph attack detected", {
+        hostname: parsedUrl.hostname,
+      });
       return {
         valid: false,
         reason: "Potential IDN homograph attack detected in domain name",
@@ -339,7 +344,13 @@ export class UrlSecurityService {
       return domain === suffix || domain.endsWith("." + suffix);
     }
 
-    return domain === pattern;
+    // For blocklist, also block subdomains
+    // e.g., "malicious.com" should block "sub.malicious.com"
+    if (domain === pattern || domain.endsWith("." + pattern)) {
+      return true;
+    }
+
+    return false;
   }
 
   /**
@@ -385,6 +396,46 @@ export class UrlSecurityService {
    * Detect potential IDN homograph attacks
    */
   private detectIdnHomograph(hostname: string): boolean {
+    // Check if hostname contains Punycode (IDN encoded) parts
+    const parts = hostname.split(".");
+    const punycodePattern = /^xn--/;
+
+    for (const part of parts) {
+      if (punycodePattern.test(part)) {
+        // This is a Punycode domain
+        // Check for suspicious patterns that indicate homograph attacks
+
+        // Common homograph attacks target well-known domains
+        // They usually have short encoded names that look like popular sites
+        const encodedPart = part.substring(4); // Remove "xn--" prefix
+
+        // Check for patterns that look like common targets
+        // e.g., "gogle", "mircosoft", "amaz0n" etc.
+        // These tend to encode to relatively short Punycode strings
+        if (encodedPart.length <= 10 && parts.length === 2) {
+          // Short encoded domain + TLD (like google.com) - suspicious
+          const tld = parts[parts.length - 1];
+          if (["com", "org", "net", "io", "co"].includes(tld)) {
+            this.logger.warn("Suspicious Punycode domain detected", {
+              hostname,
+              part,
+            });
+            return true;
+          }
+        }
+
+        // Also flag if it's a subdomain of a legitimate domain
+        // e.g., xn--pple-43d.com (apple with Cyrillic 'a')
+        if (
+          parts.length === 2 &&
+          encodedPart.match(/^[a-z0-9]{3,8}-[a-z0-9]{2,4}$/)
+        ) {
+          // Pattern matches common homograph encoding patterns
+          return true;
+        }
+      }
+    }
+
     // Check for mixed scripts that could be confusing
     const hasLatin = /[a-zA-Z]/.test(hostname);
     const hasCyrillic = /[\u0400-\u04FF]/.test(hostname);
@@ -398,9 +449,10 @@ export class UrlSecurityService {
       return true;
     }
 
-    // Check for confusable characters
-    const confusableChars = /[аеорсух]/i; // Cyrillic chars that look like Latin
-    if (hasLatin && confusableChars.test(hostname)) {
+    // Check for any Cyrillic characters that could be confused with Latin
+    // This includes common lookalike characters
+    if (hasCyrillic && hostname.match(/[a-zA-Z]/)) {
+      // Has both Cyrillic and Latin - likely homograph attack
       return true;
     }
 
@@ -464,6 +516,8 @@ export class UrlSecurityService {
     const hostname = parsedUrl.hostname;
     const parts = hostname.split(".");
 
+    // Private IP check is already done in validateDomain method
+
     // Very new domains might be suspicious
     if (parts.length === 2 && parts[0].length < 3) {
       this.logger.warn("Potentially suspicious short domain", { hostname });
@@ -510,7 +564,24 @@ export class UrlSecurityService {
   /**
    * Log security events for monitoring
    */
-  private logSecurityEvent(event: string, details: Record<string, any>): void {
+  private logSecurityEvent(
+    event: string,
+    details: Record<string, unknown>
+  ): void {
     this.logger.warn(`Security event: ${event}`, details);
+  }
+
+  // Helper method to check for control characters
+  private hasControlCharacters(text: string): boolean {
+    for (let i = 0; i < text.length; i++) {
+      const charCode = text.charCodeAt(i);
+      if (
+        (charCode >= 0 && charCode <= 31) ||
+        (charCode >= 127 && charCode <= 159)
+      ) {
+        return true;
+      }
+    }
+    return false;
   }
 }

@@ -244,7 +244,7 @@ export function processTemplate(
     repositoryContext?: string;
     diffContent: string;
     focusInstructions?: string;
-    [key: string]: any;
+    [key: string]: string | undefined;
   }
 ): string {
   let processedTemplate = template;

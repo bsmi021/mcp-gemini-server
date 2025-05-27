@@ -135,36 +135,64 @@ export const FunctionParameterTypeSchema = z
 /**
  * Base function parameter schema without recursive elements
  */
-const BaseFunctionParameterSchema = z.object({
-  type: FunctionParameterTypeSchema,
-  description: z
-    .string()
-    .optional()
-    .describe("Description of the parameter's purpose."),
-  enum: z
-    .array(z.string())
-    .optional()
-    .describe("Allowed string values for an ENUM-like parameter."),
-});
+// const BaseFunctionParameterSchema = z.object({
+//   type: FunctionParameterTypeSchema,
+//   description: z
+//     .string()
+//     .optional()
+//     .describe("Description of the parameter's purpose."),
+//   enum: z
+//     .array(z.string())
+//     .optional()
+//     .describe("Allowed string values for an ENUM-like parameter."),
+// });
+
+/**
+ * Inferred type for function parameter structure
+ */
+export type FunctionParameter = {
+  type: "OBJECT" | "STRING" | "NUMBER" | "BOOLEAN" | "ARRAY" | "INTEGER";
+  description?: string;
+  enum?: string[];
+  properties?: Record<string, FunctionParameter>;
+  required?: string[];
+  items?: FunctionParameter;
+};
 
 /**
  * Function parameter schema (supports recursive definitions)
+ * Uses z.lazy() for proper recursive handling while maintaining type safety
  */
-export const FunctionParameterSchema = BaseFunctionParameterSchema.extend({
-  properties: z.lazy(() => z.record(z.any()).optional()),
-  required: z
-    .array(z.string())
-    .optional()
-    .describe("List of required property names for OBJECT types."),
-  items: z.lazy(() =>
-    z
-      .any()
-      .optional()
-      .describe("Defines the schema for items if the parameter type is ARRAY.")
-  ),
-}).describe(
-  "Schema defining a single parameter for a function declaration, potentially recursive."
-);
+export const FunctionParameterSchema: z.ZodSchema<FunctionParameter> = z
+  .lazy(() =>
+    z.object({
+      type: FunctionParameterTypeSchema,
+      description: z
+        .string()
+        .optional()
+        .describe("Description of the parameter's purpose."),
+      enum: z
+        .array(z.string())
+        .optional()
+        .describe("Allowed string values for an ENUM-like parameter."),
+      properties: z.record(FunctionParameterSchema).optional(),
+      required: z
+        .array(z.string())
+        .optional()
+        .describe("List of required property names for OBJECT types."),
+      items: FunctionParameterSchema.optional().describe(
+        "Defines the schema for items if the parameter type is ARRAY."
+      ),
+    })
+  )
+  .describe(
+    "Schema defining a single parameter for a function declaration, potentially recursive."
+  ) as z.ZodSchema<FunctionParameter>;
+
+/**
+ * Type assertion to ensure schema produces correct types
+ */
+export type InferredFunctionParameter = z.infer<typeof FunctionParameterSchema>;
 
 /**
  * Schema for parameter properties in function declarations

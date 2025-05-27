@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, expect, vi } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 import { geminiRouteMessageTool } from "../../../src/tools/geminiRouteMessageTool.js";
 import {
   GeminiApiError,
@@ -43,8 +43,6 @@ describe("geminiRouteMessageTool", () => {
   const mockService = {
     routeMessage: mockRouteMessage,
     // Add empty implementations for required GeminiService methods
-    uploadFile: () => Promise.resolve({ name: "mock", uri: "mock" }),
-    listFiles: () => Promise.resolve({ files: [] }),
     // Add other required methods as empty implementations
   } as unknown as GeminiService;
 
@@ -62,7 +60,7 @@ describe("geminiRouteMessageTool", () => {
     const [name, description, params, handler] = mockTool.mock.calls[0];
 
     // Check tool registration parameters
-    expect(name).toBe("gemini_routeMessage");
+    expect(name).toBe("gemini_route_message");
     expect(description).toContain("Routes a message");
     expect(params).toBeDefined();
     expect(typeof handler).toBe("function");

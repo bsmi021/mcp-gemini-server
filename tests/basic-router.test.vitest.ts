@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 import { GoogleGenAI } from "@google/genai";
 import { GeminiChatService } from "../src/services/gemini/GeminiChatService.js";
 import { RouteMessageParams } from "../src/services/GeminiService.js";

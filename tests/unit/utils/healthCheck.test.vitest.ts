@@ -1,4 +1,4 @@
-import { describe, it, afterAll, expect } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 import http from "node:http";
 import {
   getHealthStatus,
@@ -17,7 +17,7 @@ describe("Health Check", () => {
   const mockServerState: ServerState = {
     isRunning: true,
     startTime: Date.now() - 5000, // 5 seconds ago
-    transport: { constructor: { name: "MockTransport" } },
+    transport: null, // Transport interface doesn't have constructor property
     server: {},
     healthCheckServer: null,
     mcpClientService: null,

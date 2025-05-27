@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 
 describe("Transport Logic Tests", () => {
   describe("Transport Selection", () => {
@@ -72,18 +72,24 @@ describe("Transport Logic Tests", () => {
   });
 
   describe("Session Validation", () => {
-    const isInitializeRequest = (body: any): boolean => {
+    const isInitializeRequest = (body: unknown): boolean => {
       if (!body || typeof body !== "object") return false;
+      const jsonRpcBody = body as {
+        jsonrpc?: string;
+        method?: string;
+        id?: string | number;
+      };
       return (
-        body.jsonrpc === "2.0" &&
-        body.method === "initialize" &&
-        (typeof body.id === "string" || typeof body.id === "number")
+        jsonRpcBody.jsonrpc === "2.0" &&
+        jsonRpcBody.method === "initialize" &&
+        (typeof jsonRpcBody.id === "string" ||
+          typeof jsonRpcBody.id === "number")
       );
     };
 
     const shouldAllowRequest = (
       sessionId: string | undefined,
-      body: any,
+      body: unknown,
       sessions: Set<string>
     ): boolean => {
       // Allow initialize requests without session
@@ -209,7 +215,6 @@ describe("Transport Logic Tests", () => {
         "MCP_SERVER_HOST",
         "MCP_SERVER_PORT",
         "MCP_CONNECTION_TOKEN",
-        "MCP_CLIENT_ID",
       ];
 
       return required.filter((key) => !env[key]);
@@ -221,7 +226,6 @@ describe("Transport Logic Tests", () => {
         MCP_SERVER_HOST: "localhost",
         MCP_SERVER_PORT: "8080",
         MCP_CONNECTION_TOKEN: "token",
-        MCP_CLIENT_ID: "client",
       };
 
       expect(validateRequiredEnvVars(env)).toEqual([]);
@@ -236,7 +240,6 @@ describe("Transport Logic Tests", () => {
       const missing = validateRequiredEnvVars(env);
       expect(missing).toContain("MCP_SERVER_PORT");
       expect(missing).toContain("MCP_CONNECTION_TOKEN");
-      expect(missing).toContain("MCP_CLIENT_ID");
     });
   });
 });

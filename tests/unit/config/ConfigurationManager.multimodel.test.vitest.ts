@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 import { ConfigurationManager } from "../../../src/config/ConfigurationManager.js";
 
 describe("ConfigurationManager - Multi-Model Support", () => {

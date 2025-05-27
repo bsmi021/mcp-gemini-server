@@ -1,7 +1,10 @@
-import { describe, it, beforeEach, afterEach, expect, vi } from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 import { setupTestServer, TestServerContext } from "../utils/test-setup.js";
 import { skipIfEnvMissing } from "../utils/env-check.js";
 import { REQUIRED_ENV_VARS } from "../utils/environment.js";
+import type { IncomingMessage, ServerResponse } from "node:http";
+
+type RequestListener = (req: IncomingMessage, res: ServerResponse) => void;
 
 /**
  * Integration tests for the Gemini router capability
@@ -29,9 +32,15 @@ describe("Gemini Router Integration", () => {
     }
   });
 
-  it("should route a message to the appropriate model", async (t) => {
+  it("should route a message to the appropriate model", async () => {
     // Skip test if environment variables are not set
-    if (skipIfEnvMissing(t, REQUIRED_ENV_VARS.ROUTER_TESTS)) return;
+    if (
+      skipIfEnvMissing(
+        { skip: (_reason: string) => vi.skip() },
+        REQUIRED_ENV_VARS.ROUTER_TESTS
+      )
+    )
+      return;
 
     // Mock the HTTP server to directly return a successful routing response for this test
     const originalListener = serverContext.server.listeners("request")[0];
@@ -59,7 +68,7 @@ describe("Gemini Router Integration", () => {
       }
 
       // Forward other requests to the original listener
-      (originalListener as any)(req, res);
+      (originalListener as RequestListener)(req, res);
     });
 
     // Create a client to call the server
@@ -81,7 +90,7 @@ describe("Gemini Router Integration", () => {
 
     // Restore original listener after fetch
     serverContext.server.removeAllListeners("request");
-    serverContext.server.on("request", originalListener as any);
+    serverContext.server.on("request", originalListener as RequestListener);
 
     // Verify successful response
     expect(response.status).toBe(200);
@@ -107,9 +116,15 @@ describe("Gemini Router Integration", () => {
     ).toBeTruthy();
   });
 
-  it("should use default model when routing fails", async (t) => {
+  it("should use default model when routing fails", async () => {
     // Skip test if environment variables are not set
-    if (skipIfEnvMissing(t, REQUIRED_ENV_VARS.ROUTER_TESTS)) return;
+    if (
+      skipIfEnvMissing(
+        { skip: (_reason: string) => vi.skip() },
+        REQUIRED_ENV_VARS.ROUTER_TESTS
+      )
+    )
+      return;
 
     // Mock the HTTP server to return a successful routing result with default model
     const originalListener = serverContext.server.listeners("request")[0];
@@ -137,7 +152,7 @@ describe("Gemini Router Integration", () => {
       }
 
       // Forward other requests to the original listener
-      (originalListener as any)(req, res);
+      (originalListener as RequestListener)(req, res);
     });
 
     // Create a client to call the server with a nonsensical routing prompt
@@ -160,7 +175,7 @@ describe("Gemini Router Integration", () => {
 
     // Restore original listener after fetch
     serverContext.server.removeAllListeners("request");
-    serverContext.server.on("request", originalListener as any);
+    serverContext.server.on("request", originalListener as RequestListener);
 
     // Verify successful response
     expect(response.status).toBe(200);
@@ -178,7 +193,7 @@ describe("Gemini Router Integration", () => {
     expect(parsedContent.chosenModel).toBe("gemini-1.5-pro");
   });
 
-  it("should return validation errors for invalid inputs", async (t) => {
+  it("should return validation errors for invalid inputs", async () => {
     // Mock the HTTP server to directly return a validation error for this test
     const originalListener = serverContext.server.listeners("request")[0];
     serverContext.server.removeAllListeners("request");
@@ -200,7 +215,7 @@ describe("Gemini Router Integration", () => {
       }
 
       // Forward other requests to the original listener
-      (originalListener as any)(req, res);
+      (originalListener as RequestListener)(req, res);
     });
 
     // Create a client to call the server with invalid parameters
@@ -230,6 +245,6 @@ describe("Gemini Router Integration", () => {
 
     // Restore original listener after test
     serverContext.server.removeAllListeners("request");
-    serverContext.server.on("request", originalListener as any);
+    serverContext.server.on("request", originalListener as RequestListener);
   });
 });

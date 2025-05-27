@@ -4,7 +4,7 @@ import { RequestError } from "@octokit/request-error";
 import { logger } from "../../utils/logger.js";
 import { ConfigurationManager } from "../../config/ConfigurationManager.js";
 import { GeminiValidationError } from "../../utils/geminiErrors.js";
-import { GitHubUrlParser, ParsedGitHubUrl } from "./GitHubUrlParser.js";
+import { GitHubUrlParser } from "./GitHubUrlParser.js";
 import KeyV from "keyv";
 
 /**
@@ -542,7 +542,14 @@ export class GitHubApiService {
     }
 
     const { owner, repo, type } = parsedUrl;
-    const result: any = { owner, repo, type };
+    const result: {
+      owner: string;
+      repo: string;
+      type: string;
+      branch?: string;
+      prNumber?: number;
+      issueNumber?: number;
+    } = { owner, repo, type };
 
     // Add type-specific information
     if (parsedUrl.branch) {

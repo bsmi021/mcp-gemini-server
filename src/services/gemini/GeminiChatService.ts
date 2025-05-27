@@ -62,6 +62,23 @@ function processThinkingConfig(
 }
 
 /**
+ * Helper function to transform validated safety settings to use actual enum values
+ * @param safetySettings The validated safety settings from Zod
+ * @returns Safety settings with actual enum values
+ */
+function transformSafetySettings(
+  safetySettings?: Array<{ category: string; threshold: string }>
+): SafetySetting[] | undefined {
+  if (!safetySettings) return undefined;
+
+  return safetySettings.map((setting) => ({
+    category: HarmCategory[setting.category as keyof typeof HarmCategory],
+    threshold:
+      HarmBlockThreshold[setting.threshold as keyof typeof HarmBlockThreshold],
+  }));
+}
+
+/**
  * Interface for the parameters of the startChatSession method
  */
 export interface StartChatParams {
@@ -518,7 +535,7 @@ export class GeminiChatService {
           maxOutputTokens: 20, // Keep it short, we just need the model name
           ...generationConfig,
         },
-        safetySettings: safetySettings,
+        safetySettings: transformSafetySettings(safetySettings),
       };
 
       // If system instruction is provided, add it to the routing request
@@ -582,7 +599,7 @@ export class GeminiChatService {
           },
         ],
         generationConfig: generationConfig,
-        safetySettings: safetySettings as unknown as SafetySetting[],
+        safetySettings: transformSafetySettings(safetySettings),
       };
 
       // Extract thinking config if it exists within generation config

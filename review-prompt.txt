@@ -1,0 +1,153 @@
+# Code Review Meta Prompt: MCP Gemini Server Upload Feature Removal
+
+## Context
+You are acting as both a **Team Lead** and **Senior Staff Engineer** conducting a comprehensive code review of a major refactoring effort. The development team has completed implementing PRD requirements to remove all file upload capabilities from an MCP (Model Context Protocol) Gemini Server while preserving URL-based multimedia analysis functionality.
+
+## Review Scope
+The changes span across the entire codebase and involve:
+- **Code Removal**: Deletion of upload-related tools, services, and type definitions
+- **Service Refactoring**: Modification of core services to remove file handling logic
+- **API Consolidation**: Streamlining of tool interfaces and parameter schemas
+- **Test Updates**: Comprehensive test suite modifications and cleanup
+- **Documentation Overhaul**: Major updates to README and creation of new user guides
+
+## Technical Architecture Context
+This is a TypeScript/Node.js MCP server that:
+- Wraps Google's `@google/genai` SDK (v0.10.0)
+- Provides Gemini AI capabilities as standardized MCP tools
+- Supports multiple transport methods (stdio, HTTP, SSE)
+- Implements service-based architecture with dependency injection
+- Uses Zod for schema validation and strict TypeScript typing
+- Maintains comprehensive test coverage with Vitest
+
+## Review Objectives
+
+### 1. **Architecture & Design Review**
+Evaluate whether the refactoring:
+- Maintains clean separation of concerns
+- Preserves the existing service-based architecture
+- Introduces any architectural debt or anti-patterns
+- Properly handles dependency injection and service boundaries
+- Maintains consistent error handling patterns
+
+### 2. **Type Safety & Schema Validation**
+Assess:
+- TypeScript type precision and safety (no widening to `any`)
+- Zod schema consistency and validation completeness  
+- Interface contracts and backward compatibility
+- Generic constraints and type inference preservation
+- Removal of unused types without breaking dependent code
+
+### 3. **API Design & Consistency**
+Review:
+- Tool parameter schema consistency across similar operations
+- MCP protocol compliance and standard adherence
+- URL-based vs file-based operation distinction clarity
+- Error response standardization and user experience
+- Tool naming conventions and parameter structures
+
+### 4. **Security Implications**
+Examine:
+- URL validation and security screening mechanisms
+- Removal of file upload attack vectors
+- Path traversal prevention in remaining file operations
+- Input sanitization for URL-based content processing
+- Authentication and authorization model integrity
+
+### 5. **Test Coverage & Quality**
+Analyze:
+- Test suite completeness after file upload test removal
+- URL-based functionality test coverage adequacy
+- Integration test scenarios for multimedia analysis
+- Mocking strategies for external URL dependencies
+- Test maintainability and reliability
+
+### 6. **Documentation & User Experience**
+Evaluate:
+- Clarity of file upload vs URL-based distinction
+- Completeness of migration guidance for existing users
+- Example quality and real-world applicability
+- Error message helpfulness and actionability
+- Developer onboarding experience improvements
+
+## Technical Validation Tasks
+
+### Code Quality Checks
+1. **Run and analyze** the project's lint, typecheck, and formatting tools
+2. **Verify** that `npm run check-all` passes without errors
+3. **Examine** TypeScript compilation with strict mode enabled
+4. **Review** test suite execution results and coverage reports
+
+### External Documentation Validation
+1. **Cross-reference** Google Gemini API documentation at:
+   - https://ai.google.dev/gemini-api/docs/image-understanding
+   - https://ai.google.dev/gemini-api/docs/video-understanding
+2. **Validate** claimed capabilities against official API specifications
+3. **Verify** supported format lists and limitation accuracy
+4. **Check** rate limiting and quota information accuracy
+
+### Dependency Analysis
+1. **Review** package.json changes for dependency management
+2. **Assess** potential security vulnerabilities in remaining dependencies
+3. **Evaluate** bundle size impact of removed functionality
+4. **Check** for unused dependencies that can be removed
+
+## Specific Areas of Concern
+
+### Critical Questions to Address:
+1. **Completeness**: Are there any remnants of upload functionality that were missed?
+2. **Breaking Changes**: What is the impact on existing users and how is it communicated?
+3. **Performance**: Does URL-based processing introduce new performance bottlenecks?
+4. **Reliability**: How robust is the URL fetching and validation logic?
+5. **Scalability**: Can the URL-based approach handle production workloads?
+
+### Code Patterns to Validate:
+- Consistent error handling across all URL-based operations
+- Proper async/await usage in service methods
+- Resource cleanup and memory management
+- Retry logic and timeout handling for URL operations
+- Caching strategy effectiveness for repeated URL access
+
+## Deliverable Requirements
+
+### Code Review Report Structure:
+1. **Executive Summary** (2-3 paragraphs)
+   - Overall assessment of changes
+   - Major risks and recommendations
+   - Go/no-go decision with rationale
+
+2. **Technical Assessment** (detailed analysis)
+   - Architecture and design review findings
+   - Security and performance implications
+   - Code quality and maintainability assessment
+   - Test coverage and reliability evaluation
+
+3. **Actionable Feedback** (prioritized list)
+   - Critical issues requiring immediate attention
+   - Recommended improvements for next iteration
+   - Future considerations and technical debt items
+   - Documentation gaps and clarity improvements
+
+4. **Compliance Verification**
+   - TypeScript strict mode compliance
+   - MCP protocol standard adherence
+   - Google Gemini API usage best practices
+   - Security best practices implementation
+
+### Review Standards:
+- **Be specific**: Reference exact file paths, line numbers, and code snippets
+- **Be actionable**: Provide concrete suggestions for improvements
+- **Be balanced**: Acknowledge good practices alongside areas for improvement
+- **Be thorough**: Cover all aspects from architecture to documentation
+- **Be pragmatic**: Consider real-world usage scenarios and edge cases
+
+## Background Context for Review
+The team has systematically worked through a comprehensive task list covering:
+- Tool removal and service refactoring (Tasks 1.0-2.0)
+- Type system cleanup and schema updates (Task 3.0)  
+- Test suite overhaul and validation (Task 4.0)
+- Documentation transformation and user guidance (Task 5.0)
+
+The goal was to create a cleaner, more focused server that emphasizes URL-based multimedia analysis while removing the complexity and security concerns of direct file uploads.
+
+Please conduct this review with the rigor expected for a production system that will be used by multiple teams and external developers.

@@ -62,7 +62,16 @@ export function createValidatedTool<T extends z.ZodRawShape, R>(
   handler: (args: z.infer<z.ZodObject<T>>) => Promise<R>
 ): ToolRegistrationFn {
   return (server: McpServer, _services: ServiceContainer) => {
-    server.tool(name, description, params, handler);
+    // Create a wrapper with proper type inference
+    const wrappedHandler = async (args: z.infer<z.ZodObject<T>>) => {
+      return handler(args);
+    };
+    server.tool(
+      name,
+      description,
+      params,
+      wrappedHandler as (args: unknown) => Promise<unknown>
+    );
     logger.info(`Validated tool registered: ${name}`);
   };
 }

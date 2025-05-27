@@ -1,13 +1,4 @@
-import {
-  describe,
-  it,
-  beforeAll,
-  afterAll,
-  beforeEach,
-  afterEach,
-  expect,
-  vi,
-} from "vitest";
+// Using vitest globals - see vitest.config.ts globals: true
 
 // Skip these flaky integration tests for now
 const itSkipIntegration = it.skip;
@@ -20,61 +11,16 @@ import os from "os";
 import { McpClientService } from "../../src/services/mcp/McpClientService.js";
 
 // Import tool processors for direct invocation
-import { mcpConnectToServerTool } from "../../src/tools/mcpConnectToServerTool.js";
-import { mcpListServerToolsTool } from "../../src/tools/mcpListServerToolsTool.js";
-import { mcpCallServerTool } from "../../src/tools/mcpCallServerTool.js";
-import { mcpDisconnectFromServerTool } from "../../src/tools/mcpDisconnectFromServerTool.js";
-import { writeToFileTool } from "../../src/tools/writeToFileTool.js";
+import { mcpClientTool } from "../../src/tools/mcpClientTool.js";
+import { writeToFile } from "../../src/tools/writeToFileTool.js";
 
 // Import Configuration manager
 import { ConfigurationManager } from "../../src/config/ConfigurationManager.js";
 
-// To mock the MCP server for testing
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-
 // Import integration test types
-import {
-  ToolProcessor,
-  ToolProcessors,
-  MockServerToolHandler,
-  ToolRegistrationFn,
-} from "../utils/integration-types.js";
+import { ToolProcessor, ToolProcessors } from "../utils/integration-types.js";
 
-// Define response types for easier type assertions
-interface ConnectionResponse {
-  connectionId: string;
-  status: string;
-  message: string;
-}
-
-interface ToolListResponse {
-  name: string;
-  description: string;
-  schema: unknown;
-}
-
-interface EchoToolResponse {
-  message: string;
-  timestamp: string;
-}
-
-interface AddToolResponse {
-  sum: number;
-  inputs: {
-    a: number;
-    b: number;
-  };
-}
-
-interface DisconnectResponse {
-  connectionId: string;
-  message: string;
-}
-
-interface FileWriteResponse {
-  message: string;
-  filePath: string;
-}
+// Response types are defined inline where needed to avoid unused variable warnings
 
 // Helper functions to set up integration environment
 function createTempOutputDir(): Promise<string> {
@@ -104,6 +50,8 @@ function mockConfigurationManager(tempDir: string): void {
     // Mock the getAllowedOutputPaths method
     instance.getAllowedOutputPaths = () => [tempDir];
 
+    // The getAllowedOutputPaths method is already mocked above
+
     // Mock the getMcpConfig method
     instance.getMcpConfig = () => ({
       host: "localhost",
@@ -112,6 +60,8 @@ function mockConfigurationManager(tempDir: string): void {
       clientId: "test-client",
       logLevel: "info",
       transport: "stdio",
+      enableStreaming: false,
+      sessionTimeoutSeconds: 60,
     });
 
     return instance;
@@ -128,37 +78,54 @@ function restoreConfigurationManager(): void {
   ).getInstance;
 }
 
-// Generic function to capture tool processor from tool registration
-function captureToolProcessor(
-  toolFn: ToolRegistrationFn,
+// Generic function to create a tool processor from current tool objects
+function createToolProcessor(
+  tool: {
+    execute: (
+      args: any,
+      service: McpClientService
+    ) => Promise<{ content: { type: string; text: string }[] }>;
+  },
+  mcpClientService: McpClientService
+): ToolProcessor;
+function createToolProcessor(
+  tool: {
+    execute: (
+      args: any
+    ) => Promise<{ content: { type: string; text: string }[] }>;
+  },
+  mcpClientService: McpClientService
+): ToolProcessor;
+function createToolProcessor(
+  tool: any,
   mcpClientService: McpClientService
 ): ToolProcessor {
-  // Create a mock MCP server with minimal implementation
-  const mockMcpServer = {
-    tool: (
-      _name: string,
-      _description: string,
-      _schema: unknown,
-      processor: ToolProcessor
-    ) => {
-      return processor;
-    },
-    // Mock implementations for required McpServer methods
-    connect: vi.fn(),
-    disconnect: vi.fn(),
-    registerTool: vi.fn(),
-  } as unknown as McpServer;
-
-  // Call the tool registration function to get the processor
-  return toolFn(mockMcpServer, mcpClientService) as unknown as ToolProcessor;
+  return async (args: any) => {
+    if (tool.execute.length === 1) {
+      // Tool doesn't need service parameter (like writeToFile)
+      return await tool.execute(args);
+    } else {
+      // Tool needs service parameter (like mcpClientTool)
+      return await tool.execute(args, mcpClientService);
+    }
+  };
 }
 
 // Start dummy MCP server (stdio)
 async function startDummyMcpServerStdio(): Promise<ChildProcess> {
-  const serverPath = path.resolve("./tests/integration/dummyMcpServerStdio.js");
+  const currentDir = path.dirname(new URL(import.meta.url).pathname);
+  const serverPath = path.resolve(currentDir, "./dummyMcpServerStdio.ts");
+  console.debug(`Starting STDIO server at path: ${serverPath}`);
 
-  // Start the child process with node, ensuring proper stdio handling
-  const nodeProcess = spawn("node", [serverPath], {
+  // Verify the file exists
+  try {
+    await fs.access(serverPath);
+  } catch (error) {
+    throw new Error(`Dummy server file not found at: ${serverPath}`);
+  }
+
+  // Start the child process with ts-node for TypeScript execution
+  const nodeProcess = spawn("node", ["--loader", "ts-node/esm", serverPath], {
     stdio: ["pipe", "pipe", "pipe"],
     env: {
       ...process.env,
@@ -174,11 +141,17 @@ async function startDummyMcpServerStdio(): Promise<ChildProcess> {
     nodeProcess.stderr.on("data", (data) => {
       const message = data.toString();
       errorOutput += message;
+      console.debug(`[STDIO Server stderr]: ${message}`);
 
       // When we see the server ready message, resolve
       if (message.includes("Dummy MCP Server (stdio) started")) {
         resolve(nodeProcess);
       }
+    });
+
+    // Also listen on stdout for any output
+    nodeProcess.stdout.on("data", (data) => {
+      console.debug(`[STDIO Server stdout]: ${data.toString()}`);
     });
 
     // Handle startup failure
@@ -194,7 +167,7 @@ async function startDummyMcpServerStdio(): Promise<ChildProcess> {
           `Timeout waiting for dummy server to start. Last output: ${errorOutput}`
         )
       );
-    }, 5000);
+    }, 15000); // Increased timeout to 15 seconds
 
     // Clear the timeout if we resolve or reject
     nodeProcess.on("exit", () => {
@@ -205,16 +178,22 @@ async function startDummyMcpServerStdio(): Promise<ChildProcess> {
 
 // Start dummy MCP server (SSE)
 async function startDummyMcpServerSse(port = 3456): Promise<ChildProcess> {
-  const serverPath = path.resolve("./tests/integration/dummyMcpServerSse.js");
+  const currentDir = path.dirname(new URL(import.meta.url).pathname);
+  const serverPath = path.resolve(currentDir, "./dummyMcpServerSse.ts");
+  console.debug(`Starting SSE server at path: ${serverPath}`);
 
-  // Start the child process with node
-  const nodeProcess = spawn("node", [serverPath, port.toString()], {
-    stdio: ["pipe", "pipe", "pipe"],
-    env: {
-      ...process.env,
-      NODE_OPTIONS: "--no-warnings --experimental-specifier-resolution=node",
-    },
-  });
+  // Start the child process with ts-node for TypeScript execution
+  const nodeProcess = spawn(
+    "node",
+    ["--loader", "ts-node/esm", serverPath, port.toString()],
+    {
+      stdio: ["pipe", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        NODE_OPTIONS: "--no-warnings --experimental-specifier-resolution=node",
+      },
+    }
+  );
 
   // Create a Promise that resolves when the server is ready
   return new Promise((resolve, reject) => {
@@ -224,11 +203,17 @@ async function startDummyMcpServerSse(port = 3456): Promise<ChildProcess> {
     nodeProcess.stderr.on("data", (data) => {
       const message = data.toString();
       errorOutput += message;
+      console.debug(`[SSE Server stderr]: ${message}`);
 
       // When we see the server ready message, resolve
       if (message.includes(`Dummy MCP Server (SSE) started on port ${port}`)) {
         resolve(nodeProcess);
       }
+    });
+
+    // Also listen on stdout for any output
+    nodeProcess.stdout.on("data", (data) => {
+      console.debug(`[SSE Server stdout]: ${data.toString()}`);
     });
 
     // Handle startup failure
@@ -244,7 +229,7 @@ async function startDummyMcpServerSse(port = 3456): Promise<ChildProcess> {
           `Timeout waiting for dummy server to start. Last output: ${errorOutput}`
         )
       );
-    }, 5000);
+    }, 15000); // Increased timeout to 15 seconds
 
     // Clear the timeout if we resolve or reject
     nodeProcess.on("exit", () => {
@@ -265,22 +250,22 @@ describe("MCP Client Integration Tests", () => {
     // Create a temporary directory for test outputs
     tempDir = await createTempOutputDir();
 
+    // Set the environment variable for file security
+    process.env.GEMINI_SAFE_FILE_BASE_DIR = tempDir;
+
     // Mock ConfigurationManager to use our test settings
     mockConfigurationManager(tempDir);
 
     // Initialize the MCP client service
     mcpClientService = new McpClientService();
 
-    // Capture tool processors for testing
+    // Create tool processors for testing
     processors = {
-      connect: captureToolProcessor(mcpConnectToServerTool, mcpClientService),
-      listTools: captureToolProcessor(mcpListServerToolsTool, mcpClientService),
-      callServerTool: captureToolProcessor(mcpCallServerTool, mcpClientService),
-      disconnect: captureToolProcessor(
-        mcpDisconnectFromServerTool,
-        mcpClientService
-      ),
-      writeToFile: captureToolProcessor(writeToFileTool, mcpClientService),
+      connect: createToolProcessor(mcpClientTool, mcpClientService),
+      listTools: createToolProcessor(mcpClientTool, mcpClientService),
+      callServerTool: createToolProcessor(mcpClientTool, mcpClientService),
+      disconnect: createToolProcessor(mcpClientTool, mcpClientService),
+      writeToFile: createToolProcessor(writeToFile, mcpClientService),
     };
   });
 
@@ -301,6 +286,9 @@ describe("MCP Client Integration Tests", () => {
     // Restore the original ConfigurationManager
     restoreConfigurationManager();
 
+    // Clean up environment variable
+    delete process.env.GEMINI_SAFE_FILE_BASE_DIR;
+
     // Clean up temporary directory
     await cleanupTempDir(tempDir);
   });
@@ -310,7 +298,7 @@ describe("MCP Client Integration Tests", () => {
     beforeEach(async function () {
       // Start the dummy stdio server
       stdioServer = await startDummyMcpServerStdio();
-    });
+    }, 20000); // Increase timeout to 20 seconds
 
     // Clean up stdio server after each test
     afterEach(function () {
@@ -333,7 +321,11 @@ describe("MCP Client Integration Tests", () => {
           connectionDetails: {
             transport: "stdio",
             command: "node",
-            args: ["./tests/integration/dummyMcpServerStdio.js"],
+            args: [
+              "--loader",
+              "ts-node/esm",
+              "./tests/integration/dummyMcpServerStdio.ts",
+            ],
           },
         };
 
@@ -436,7 +428,11 @@ describe("MCP Client Integration Tests", () => {
           connectionDetails: {
             transport: "stdio",
             command: "node",
-            args: ["./tests/integration/dummyMcpServerStdio.js"],
+            args: [
+              "--loader",
+              "ts-node/esm",
+              "./tests/integration/dummyMcpServerStdio.ts",
+            ],
           },
         };
 
@@ -492,7 +488,7 @@ describe("MCP Client Integration Tests", () => {
     beforeEach(async function () {
       // Start the dummy SSE server
       sseServer = await startDummyMcpServerSse();
-    });
+    }, 20000); // Increase timeout to 20 seconds
 
     // Clean up SSE server after each test
     afterEach(function () {
@@ -592,30 +588,11 @@ describe("MCP Client Integration Tests", () => {
   });
 
   describe("Write to File Tool Tests", () => {
-    // Create mock MCP server for writeToFile tests
-    let mockMcpServer: unknown;
     let writeToFileProcessor: ToolProcessor;
 
     beforeEach(function () {
-      // Create a fresh mock MCP server for each test
-      mockMcpServer = {
-        tool: (
-          _name: string,
-          _desc: string,
-          _schema: unknown,
-          processor: ToolProcessor
-        ) => processor,
-        // Mock implementations for required McpServer methods
-        connect: vi.fn(),
-        disconnect: vi.fn(),
-        registerTool: vi.fn(),
-      } as unknown as McpServer;
-
-      // Register the writeToFileTool and capture its processor
-      writeToFileProcessor = captureToolProcessor(
-        writeToFileTool,
-        mcpClientService
-      );
+      // Create the writeToFile processor
+      writeToFileProcessor = createToolProcessor(writeToFile, mcpClientService);
     });
 
     itSkipIntegration("should write a string to a file", async () => {

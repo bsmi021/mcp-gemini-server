@@ -7,9 +7,7 @@ import { McpClientService } from "../../src/services/mcp/McpClientService.js";
 /**
  * Tool processor function type
  */
-export type ToolProcessor = <T = any>(
-  args: any
-) => Promise<{
+export type ToolProcessor = (args: any) => Promise<{
   content: Array<{
     text: string;
     type: string;

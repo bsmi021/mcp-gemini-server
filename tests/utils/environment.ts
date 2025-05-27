@@ -144,7 +144,7 @@ export function verifyEnvVars(
 export function getFallbackValue(varName: string): string {
   // Define fallback values for common variables
   const fallbacks: Record<string, string> = {
-    GOOGLE_GEMINI_MODEL: "gemini-1.5-flash-latest",
+    GOOGLE_GEMINI_MODEL: "gemini-1.5-flash",
     GOOGLE_GEMINI_IMAGE_RESOLUTION: "512x512",
     GOOGLE_GEMINI_MAX_IMAGE_SIZE_MB: "5",
     GOOGLE_GEMINI_SUPPORTED_IMAGE_FORMATS: '["image/jpeg","image/png"]',
